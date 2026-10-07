@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Bot, User } from "lucide-react";
+import { Bot, User, Paperclip } from "lucide-react";
 import type { Message } from "../lib/types";
 
 interface ChatAreaProps {
@@ -54,6 +54,19 @@ function MessageBubble({ message }: { message: Message }) {
               return <p key={i}>{line}</p>;
             })}
           </div>
+          {message.attachments && message.attachments.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {message.attachments.map((att) => (
+                <span
+                  key={att.id}
+                  className="inline-flex max-w-[180px] items-center gap-1.5 rounded-lg border border-zinc-600/60 bg-zinc-700/50 px-2 py-1 text-[11px] text-zinc-200"
+                >
+                  <Paperclip className="h-3 w-3 shrink-0 text-violet-300" />
+                  <span className="truncate">{att.filename}</span>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <p className="mt-1 text-[10px] text-zinc-600">{formatTime(message.timestamp)}</p>
       </div>

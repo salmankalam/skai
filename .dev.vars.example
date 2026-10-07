@@ -1,0 +1,2 @@
+# Copy to .dev.vars for local dev. For production: wrangler secret put OPENROUTER_API_KEY
+OPENROUTER_API_KEY=sk-or-v1-your-key-here

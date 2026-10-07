@@ -5,18 +5,43 @@ import { Sidebar } from "./components/Sidebar";
 import { ChatArea } from "./components/ChatArea";
 import { ChatInput } from "./components/ChatInput";
 import { WelcomeScreen } from "./components/WelcomeScreen";
-import { DEMO_CONVERSATIONS } from "./lib/demo-data";
 import { DEFAULT_MODEL } from "./lib/models";
-import type { Conversation, Message } from "./lib/types";
+import { MAX_FILE_SIZE, detectKind } from "./lib/files";
+import {
+  listConversations,
+  getConversation,
+  createConversation,
+  deleteConversation,
+} from "./server/conversations";
+import { uploadFile, deleteFile } from "./server/files";
+import { chat } from "./server/chat";
+import type { Conversation, FileAttachment, Message } from "./lib/types";
+
+async function fileToBase64(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
 
 export default function App() {
   const [userId, setUserId] = useState<string>("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [conversations, setConversations] = useState<Conversation[]>(DEMO_CONVERSATIONS);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [model, setModel] = useState<string>(DEFAULT_MODEL);
   const [streaming, setStreaming] = useState(false);
   const [streamText, setStreamText] = useState("");
-  const streamRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [attachments, setAttachments] = useState<FileAttachment[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const loadedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let id = localStorage.getItem("sk-ai-user-id");
@@ -25,128 +50,227 @@ export default function App() {
       localStorage.setItem("sk-ai-user-id", id);
     }
     setUserId(id);
+    listConversations({ data: { userId: id } })
+      .then((convs) => setConversations(convs))
+      .catch((e) => setError(errMsg(e)));
   }, []);
 
   const activeConv = conversations.find((c) => c.id === activeId) ?? null;
 
-  const simulateStreaming = useCallback((fullText: string) => {
-    setStreaming(true);
-    setStreamText("");
-    let i = 0;
-    const chunkSize = 3;
-
-    const tick = () => {
-      i += chunkSize;
-      setStreamText(fullText.slice(0, i));
-      if (i < fullText.length) {
-        streamRef.current = setTimeout(tick, 15);
-      } else {
-        setStreaming(false);
-        setStreamText("");
+  const updateConv = useCallback((id: string, fn: (c: Conversation) => Conversation) => {
+    setConversations((prev) => {
+      const next = prev.map((c) => (c.id === id ? fn(c) : c));
+      const idx = next.findIndex((c) => c.id === id);
+      if (idx > 0) {
+        const [conv] = next.splice(idx, 1);
+        next.unshift(conv);
       }
-    };
-    streamRef.current = setTimeout(tick, 100);
+      return next;
+    });
   }, []);
 
+  const handleSelect = useCallback(
+    async (id: string) => {
+      setActiveId(id);
+      setError(null);
+      if (loadedRef.current.has(id)) return;
+      loadedRef.current.add(id);
+      try {
+        const full = await getConversation({ data: { userId, conversationId: id } });
+        if (full) {
+          setConversations((prev) => prev.map((c) => (c.id === id ? full : c)));
+        }
+      } catch (e) {
+        setError(errMsg(e));
+      }
+    },
+    [userId]
+  );
+
   const handleSend = useCallback(
-    (content: string) => {
+    async (content: string) => {
+      if (!userId || streaming || !content.trim()) return;
+      setError(null);
+      const atts = attachments;
+      setAttachments([]);
+
+      let conv = activeId ? conversations.find((c) => c.id === activeId) ?? null : null;
+      let convId = conv?.id ?? null;
+
+      if (!conv || !convId) {
+        convId = uuidv4();
+        const title = content.slice(0, 40) + (content.length > 40 ? "..." : "");
+        const convModel = model;
+        try {
+          await createConversation({
+            data: { id: convId, userId, title, model: convModel },
+          });
+        } catch (e) {
+          setAttachments(atts);
+          setError(errMsg(e));
+          return;
+        }
+        const now = Date.now();
+        conv = { id: convId, title, model: convModel, messages: [], createdAt: now, updatedAt: now };
+        loadedRef.current.add(convId);
+        setConversations((prev) => [conv as Conversation, ...prev]);
+        setActiveId(convId);
+      }
+
       const userMsg: Message = {
         id: uuidv4(),
         role: "user",
         content,
         timestamp: Date.now(),
+        attachments: atts.length > 0 ? atts : undefined,
       };
+      updateConv(convId, (c) => ({
+        ...c,
+        messages: [...c.messages, userMsg],
+        updatedAt: Date.now(),
+      }));
 
-      let convId = activeId;
-      if (!convId) {
-        convId = uuidv4();
-        const newConv: Conversation = {
-          id: convId,
-          title: content.slice(0, 40) + (content.length > 40 ? "..." : ""),
-          model: DEFAULT_MODEL,
-          messages: [userMsg],
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        };
-        setConversations((prev) => [newConv, ...prev]);
-        setActiveId(convId);
-      } else {
-        setConversations((prev) =>
-          prev.map((c) =>
-            c.id === convId
-              ? { ...c, messages: [...c.messages, userMsg], updatedAt: Date.now() }
-              : c
-          )
-        );
-      }
+      setStreaming(true);
+      setStreamText("");
+      try {
+        const res = (await chat({
+          data: {
+            userId,
+            conversationId: convId,
+            model: conv.model,
+            userMessageId: userMsg.id,
+            content,
+            attachmentIds: atts.map((a) => a.id),
+          },
+        })) as unknown as Response;
 
-      const responses: Record<string, string> = {
-        default: `You asked about "${content.slice(0, 50)}". This is a simulated response for the SK-AI demo.\n\nIn production, this would be a real AI response streamed from OpenRouter. The response supports **markdown** formatting:\n\n- Lists and bullet points\n- \`inline code\` and code blocks\n- **Bold** and *italic* text\n\nTry asking about code, Cloudflare, or anything else!`,
-        code: `Here's a React example related to your question:\n\n\`\`\`typescript\nfunction useChat() {\n  const [messages, setMessages] = useState<Message[]>([]);\n  const [loading, setLoading] = useState(false);\n\n  const send = async (content: string) => {\n    setLoading(true);\n    // Send to API...\n    setLoading(false);\n  };\n\n  return { messages, send, loading };\n}\n\`\`\`\n\nThis pattern is used in the SK-AI codebase.`,
-        cloudflare: `Cloudflare Workers provide a serverless runtime that executes at the edge. Key features:\n\n- **Global deployment** — runs in 300+ locations\n- **Zero cold starts** — V8 isolates spin up instantly\n- **KV storage** — perfect for conversation history\n- **D1 database** — SQLite at the edge\n\nSK-AI uses Workers KV to store your conversations as JSON.`,
-      };
+        if (!res.ok || !res.body) {
+          const body = await res.text().catch(() => "");
+          throw new Error(body || `Request failed (${res.status})`);
+        }
 
-      const lower = content.toLowerCase();
-      let responseKey = "default";
-      if (lower.includes("code") || lower.includes("react") || lower.includes("function")) {
-        responseKey = "code";
-      } else if (lower.includes("cloudflare") || lower.includes("worker") || lower.includes("deploy")) {
-        responseKey = "cloudflare";
-      }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let acc = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const frames = buffer.split("\n\n");
+          buffer = frames.pop() ?? "";
+          for (const frame of frames) {
+            for (const line of frame.split("\n")) {
+              if (!line.startsWith("data:")) continue;
+              const payload = line.slice(5).trim();
+              if (!payload || payload === "[DONE]") continue;
+              try {
+                const json = JSON.parse(payload);
+                const delta = json?.choices?.[0]?.delta?.content;
+                if (typeof delta === "string") {
+                  acc += delta;
+                  setStreamText(acc);
+                }
+              } catch {
+                // ignore keep-alive frames
+              }
+            }
+          }
+        }
 
-      const responseText = responses[responseKey];
-
-      setTimeout(() => {
-        simulateStreaming(responseText);
-
-        setTimeout(() => {
+        if (acc) {
           const assistantMsg: Message = {
             id: uuidv4(),
             role: "assistant",
-            content: responseText,
+            content: acc,
             timestamp: Date.now(),
           };
-          setConversations((prev) =>
-            prev.map((c) =>
-              c.id === convId
-                ? { ...c, messages: [...c.messages, assistantMsg], updatedAt: Date.now() }
-                : c
-            )
-          );
-        }, (responseText.length / 3) * 15 + 200);
-      }, 300);
+          updateConv(convId, (c) => ({
+            ...c,
+            messages: [...c.messages, assistantMsg],
+            updatedAt: Date.now(),
+          }));
+        }
+      } catch (e) {
+        setError(errMsg(e));
+      } finally {
+        setStreaming(false);
+        setStreamText("");
+      }
     },
-    [activeId, simulateStreaming]
+    [userId, streaming, attachments, activeId, conversations, model, updateConv]
   );
 
   const handleNew = useCallback(() => {
     setActiveId(null);
+    setError(null);
+    setAttachments([]);
   }, []);
 
   const handleDelete = useCallback(
     (id: string) => {
       setConversations((prev) => prev.filter((c) => c.id !== id));
       if (activeId === id) setActiveId(null);
+      if (userId) {
+        deleteConversation({ data: { userId, conversationId: id } }).catch(() => {});
+      }
     },
-    [activeId]
+    [activeId, userId]
   );
 
   const handleModelChange = useCallback(
-    (model: string) => {
+    (nextModel: string) => {
+      setModel(nextModel);
       if (activeId) {
-        setConversations((prev) =>
-          prev.map((c) => (c.id === activeId ? { ...c, model } : c))
-        );
+        updateConv(activeId, (c) => ({ ...c, model: nextModel }));
       }
     },
-    [activeId]
+    [activeId, updateConv]
   );
 
-  useEffect(() => {
-    return () => {
-      if (streamRef.current) clearTimeout(streamRef.current);
-    };
-  }, []);
+  const handleAddFiles = useCallback(
+    async (files: File[]) => {
+      if (!userId) return;
+      setError(null);
+      for (const file of files) {
+        try {
+          if (file.size > MAX_FILE_SIZE) {
+            throw new Error(`${file.name}: maximum file size is 5 MB.`);
+          }
+          const kind = detectKind(file.name, file.type);
+          if (!kind) {
+            throw new Error(
+              `${file.name}: unsupported type. Allowed: images, PDF, and text/code files.`
+            );
+          }
+          const dataBase64 = await fileToBase64(file);
+          const att = await uploadFile({
+            data: {
+              userId,
+              conversationId: activeId,
+              filename: file.name,
+              contentType: file.type,
+              dataBase64,
+            },
+          });
+          setAttachments((prev) => [...prev, att]);
+        } catch (e) {
+          setError(errMsg(e));
+        }
+      }
+    },
+    [userId, activeId]
+  );
+
+  const handleRemoveAttachment = useCallback(
+    (id: string) => {
+      setAttachments((prev) => prev.filter((a) => a.id !== id));
+      if (userId) {
+        deleteFile({ data: { userId, fileId: id } }).catch(() => {});
+      }
+    },
+    [userId]
+  );
 
   return (
     <div className="flex h-screen bg-zinc-950 text-zinc-100">
@@ -154,7 +278,7 @@ export default function App() {
         open={sidebarOpen}
         conversations={conversations}
         activeId={activeId}
-        onSelect={setActiveId}
+        onSelect={handleSelect}
         onNew={handleNew}
         onDelete={handleDelete}
       />
@@ -183,6 +307,7 @@ export default function App() {
             </>
           )}
         </header>
+
         {activeConv ? (
           <>
             <ChatArea
@@ -194,6 +319,11 @@ export default function App() {
               model={activeConv.model}
               onModelChange={handleModelChange}
               onSend={handleSend}
+              attachments={attachments}
+              onAddFiles={handleAddFiles}
+              onRemoveAttachment={handleRemoveAttachment}
+              error={error}
+              onDismissError={() => setError(null)}
               disabled={streaming}
             />
           </>
@@ -201,9 +331,14 @@ export default function App() {
           <>
             <WelcomeScreen onPromptClick={handleSend} />
             <ChatInput
-              model={DEFAULT_MODEL}
-              onModelChange={() => {}}
+              model={model}
+              onModelChange={handleModelChange}
               onSend={handleSend}
+              attachments={attachments}
+              onAddFiles={handleAddFiles}
+              onRemoveAttachment={handleRemoveAttachment}
+              error={error}
+              onDismissError={() => setError(null)}
               disabled={streaming}
             />
           </>

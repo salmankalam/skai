@@ -1,8 +1,17 @@
+export interface FileAttachment {
+  id: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  kind: "text" | "image" | "pdf";
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: number;
+  attachments?: FileAttachment[];
 }
 
 export interface Conversation {
@@ -19,4 +28,5 @@ export interface ModelOption {
   name: string;
   provider: string;
   description: string;
+  vision: boolean;
 }
