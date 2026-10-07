@@ -2,6 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
 import { DEFAULT_MODEL, VISION_FALLBACK_MODEL, hasVision, isFreeModel } from "../lib/models";
 import { MAX_TEXT_INJECT_CHARS, detectKind } from "../lib/files";
+import { DAILY_MESSAGE_LIMIT } from "../lib/limits";
+import { countTodayMessages } from "./daily-limit";
 import type { FileAttachment } from "../lib/types";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -102,14 +104,22 @@ function createDeltaAccumulator() {
 export const chat = createServerFn({ method: "POST" })
   .validator((data: ChatRequest) => data)
   .handler(async ({ data }): Promise<Response> => {
+    if (!data.content.trim()) throw new Error("Message is empty.");
+    if (!isFreeModel(data.model)) throw new Error("Only free models are allowed.");
+
+    const usedToday = await countTodayMessages(data.userId);
+    if (usedToday >= DAILY_MESSAGE_LIMIT) {
+      throw new Error(
+        `Daily limit reached — ${DAILY_MESSAGE_LIMIT} messages per day per user. Your quota resets at midnight UTC.`
+      );
+    }
+
     const apiKey = env.OPENROUTER_API_KEY;
     if (!apiKey) {
       throw new Error(
         "OPENROUTER_API_KEY is not set. Add it to .dev.vars for local dev, or run `wrangler secret put OPENROUTER_API_KEY` for production."
       );
     }
-    if (!data.content.trim()) throw new Error("Message is empty.");
-    if (!isFreeModel(data.model)) throw new Error("Only free models are allowed.");
 
     const fileRows = await loadFileRows(data.userId, data.attachmentIds);
     const attachments = fileRows.map(

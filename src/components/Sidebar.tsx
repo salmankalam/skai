@@ -20,8 +20,8 @@ export function Sidebar({ open, conversations, activeId, onSelect, onNew, onDele
 
   return (
     <aside
-      className={`flex h-full overflow-hidden border-r border-zinc-800 bg-zinc-950 transition-all duration-200 ease-in-out ${
-        open ? "w-72" : "w-0 border-r-0"
+      className={`fixed inset-y-0 left-0 z-40 flex h-full overflow-hidden border-r border-zinc-800 bg-zinc-950 transition-all duration-200 ease-in-out md:static md:z-auto ${
+        open ? "w-72 translate-x-0" : "w-72 -translate-x-full md:w-0 md:translate-x-0 md:border-r-0"
       }`}
     >
       <div className="flex h-full w-72 shrink-0 flex-col">

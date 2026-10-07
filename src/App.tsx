@@ -15,6 +15,8 @@ import {
 } from "./server/conversations";
 import { uploadFile, deleteFile } from "./server/files";
 import { chat } from "./server/chat";
+import { getDailyUsage } from "./server/usage";
+import type { DailyUsage } from "./lib/limits";
 import type { Conversation, FileAttachment, Message } from "./lib/types";
 
 async function fileToBase64(file: File): Promise<string> {
@@ -41,7 +43,14 @@ export default function App() {
   const [streamText, setStreamText] = useState("");
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [usage, setUsage] = useState<DailyUsage | null>(null);
   const loadedRef = useRef<Set<string>>(new Set());
+
+  const refreshUsage = useCallback((uid: string) => {
+    getDailyUsage({ data: { userId: uid } })
+      .then(setUsage)
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     let id = localStorage.getItem("sk-ai-user-id");
@@ -53,6 +62,11 @@ export default function App() {
     listConversations({ data: { userId: id } })
       .then((convs) => setConversations(convs))
       .catch((e) => setError(errMsg(e)));
+    refreshUsage(id);
+  }, [refreshUsage]);
+
+  useEffect(() => {
+    if (window.innerWidth < 768) setSidebarOpen(false);
   }, []);
 
   const activeConv = conversations.find((c) => c.id === activeId) ?? null;
@@ -73,6 +87,7 @@ export default function App() {
     async (id: string) => {
       setActiveId(id);
       setError(null);
+      if (window.innerWidth < 768) setSidebarOpen(false);
       if (loadedRef.current.has(id)) return;
       loadedRef.current.add(id);
       try {
@@ -196,15 +211,17 @@ export default function App() {
       } finally {
         setStreaming(false);
         setStreamText("");
+        if (userId) refreshUsage(userId);
       }
     },
-    [userId, streaming, attachments, activeId, conversations, model, updateConv]
+    [userId, streaming, attachments, activeId, conversations, model, updateConv, refreshUsage]
   );
 
   const handleNew = useCallback(() => {
     setActiveId(null);
     setError(null);
     setAttachments([]);
+    if (window.innerWidth < 768) setSidebarOpen(false);
   }, []);
 
   const handleDelete = useCallback(
@@ -273,7 +290,7 @@ export default function App() {
   );
 
   return (
-    <div className="flex h-screen bg-zinc-950 text-zinc-100">
+    <div className="flex h-[100dvh] bg-zinc-950 text-zinc-100">
       <Sidebar
         open={sidebarOpen}
         conversations={conversations}
@@ -282,8 +299,15 @@ export default function App() {
         onNew={handleNew}
         onDelete={handleDelete}
       />
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
 
-      <main className="flex flex-1 flex-col">
+      <main className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-2 border-b border-zinc-800 px-4 py-2.5">
           <button
             onClick={() => setSidebarOpen((o) => !o)}
@@ -301,7 +325,7 @@ export default function App() {
               <h2 className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-300">
                 {activeConv.title}
               </h2>
-              <span className="shrink-0 rounded-full bg-zinc-800 px-2.5 py-0.5 text-[11px] text-zinc-400">
+              <span className="hidden shrink-0 rounded-full bg-zinc-800 px-2.5 py-0.5 text-[11px] text-zinc-400 sm:inline-block">
                 {activeConv.model}
               </span>
             </>
@@ -329,7 +353,7 @@ export default function App() {
           </>
         ) : (
           <>
-            <WelcomeScreen onPromptClick={handleSend} />
+            <WelcomeScreen onPromptClick={handleSend} usage={usage} />
             <ChatInput
               model={model}
               onModelChange={handleModelChange}
