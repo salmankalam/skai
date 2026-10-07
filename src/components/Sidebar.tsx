@@ -3,6 +3,7 @@ import { MessageSquare, Plus, Search, Trash2, Sparkles } from "lucide-react";
 import type { Conversation } from "../lib/types";
 
 interface SidebarProps {
+  open: boolean;
   conversations: Conversation[];
   activeId: string | null;
   onSelect: (id: string) => void;
@@ -10,7 +11,7 @@ interface SidebarProps {
   onDelete: (id: string) => void;
 }
 
-export function Sidebar({ conversations, activeId, onSelect, onNew, onDelete }: SidebarProps) {
+export function Sidebar({ open, conversations, activeId, onSelect, onNew, onDelete }: SidebarProps) {
   const [search, setSearch] = useState("");
 
   const filtered = conversations.filter((c) =>
@@ -18,7 +19,12 @@ export function Sidebar({ conversations, activeId, onSelect, onNew, onDelete }: 
   );
 
   return (
-    <aside className="flex h-full w-72 flex-col border-r border-zinc-800 bg-zinc-950">
+    <aside
+      className={`flex h-full overflow-hidden border-r border-zinc-800 bg-zinc-950 transition-all duration-200 ease-in-out ${
+        open ? "w-72" : "w-0 border-r-0"
+      }`}
+    >
+      <div className="flex h-full w-72 shrink-0 flex-col">
       <div className="flex items-center gap-2 px-4 py-4">
         <Sparkles className="h-5 w-5 text-violet-400" />
         <h1 className="text-lg font-semibold text-white">SK-AI</h1>
@@ -84,6 +90,7 @@ export function Sidebar({ conversations, activeId, onSelect, onNew, onDelete }: 
 
       <div className="border-t border-zinc-800 px-4 py-3">
         <p className="text-xs text-zinc-600">Demo Mode — No auth required</p>
+      </div>
       </div>
     </aside>
   );

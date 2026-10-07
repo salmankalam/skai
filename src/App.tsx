@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { v4 as uuidv4 } from "uuid";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { ChatArea } from "./components/ChatArea";
 import { ChatInput } from "./components/ChatInput";
@@ -10,6 +11,7 @@ import type { Conversation, Message } from "./lib/types";
 
 export default function App() {
   const [userId, setUserId] = useState<string>("");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [conversations, setConversations] = useState<Conversation[]>(DEMO_CONVERSATIONS);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [streaming, setStreaming] = useState(false);
@@ -149,6 +151,7 @@ export default function App() {
   return (
     <div className="flex h-screen bg-zinc-950 text-zinc-100">
       <Sidebar
+        open={sidebarOpen}
         conversations={conversations}
         activeId={activeId}
         onSelect={setActiveId}
@@ -157,14 +160,31 @@ export default function App() {
       />
 
       <main className="flex flex-1 flex-col">
-        {activeConv ? (
-          <>
-            <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-              <h2 className="text-sm font-medium text-zinc-300 truncate">{activeConv.title}</h2>
-              <span className="ml-2 shrink-0 rounded-full bg-zinc-800 px-2.5 py-0.5 text-[11px] text-zinc-400">
+        <header className="flex items-center gap-2 border-b border-zinc-800 px-4 py-2.5">
+          <button
+            onClick={() => setSidebarOpen((o) => !o)}
+            aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
+            className="shrink-0 rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+          >
+            {sidebarOpen ? (
+              <PanelLeftClose className="h-5 w-5" />
+            ) : (
+              <PanelLeftOpen className="h-5 w-5" />
+            )}
+          </button>
+          {activeConv && (
+            <>
+              <h2 className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-300">
+                {activeConv.title}
+              </h2>
+              <span className="shrink-0 rounded-full bg-zinc-800 px-2.5 py-0.5 text-[11px] text-zinc-400">
                 {activeConv.model}
               </span>
-            </div>
+            </>
+          )}
+        </header>
+        {activeConv ? (
+          <>
             <ChatArea
               messages={activeConv.messages}
               streaming={streaming}
