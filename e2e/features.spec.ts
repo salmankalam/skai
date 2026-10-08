@@ -250,8 +250,23 @@ test("features", async ({ page }) => {
     await page.type('textarea[placeholder*="Message SK-AI"]', "text while openrouter blocked");
     await page.keyboard.press("Enter");
     await innerTextContains(page, "messages per day per user", 20000);
-    const afterText = await bodyText(page);
-    expect(afterText).not.toContain("OpenRouter's daily quota");
+    const errBanner = await page.textContent('[data-testid="chat-error"]');
+    expect(errBanner).not.toContain("OpenRouter's daily quota");
     await shot(page, "feat-11-text-still-works.png");
+  });
+
+  await test.step("notifications: bell persists quota decisions + toast", async () => {
+    await page.waitForSelector('[data-testid="toast"]', { timeout: 10000 });
+    const toastText = await page.textContent('[data-testid="toast"]');
+    expect(toastText).toContain("midnight UTC");
+
+    await page.click('[data-testid="notif-bell"]');
+    await page.waitForSelector('[data-testid="notif-panel"]', { timeout: 5000 });
+    const panel = await page.textContent('[data-testid="notif-panel"]');
+    expect(panel).toContain("OpenRouter's daily quota was used up");
+    expect(panel).toContain("File-task limit reached");
+    expect(panel).toContain("messages per day per user");
+    await page.waitForSelector('[data-testid="notif-badge"]', { state: "detached", timeout: 5000 });
+    await shot(page, "feat-12-notifications.png");
   });
 });

@@ -4,7 +4,8 @@ import { ALL_MODELS, NARA_FREE_MODELS, isFreeModel } from "../lib/models";
 import { MAX_TEXT_INJECT_CHARS, detectKind } from "../lib/files";
 import { DAILY_MESSAGE_LIMIT, FILE_DAILY_LIMIT, OPENROUTER_GLOBAL_LIMIT, GLOBAL_USER } from "../lib/limits";
 import { getUsage, getGlobalUsage, incrementUsage, setGlobalUsage } from "./provider-usage";
-import type { FileAttachment } from "../lib/types";
+import { saveNotification } from "./notifications-db";
+import type { AppNotification, FileAttachment } from "../lib/types";
 
 const NARA_URL = "https://router.bynara.id/v1/chat/completions";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -136,9 +137,9 @@ export const chat = createServerFn({ method: "POST" })
     if (route === "nara") {
       const used = await getUsage(data.userId, "nara");
       if (used >= DAILY_MESSAGE_LIMIT) {
-        throw new Error(
-          `Daily limit reached — ${DAILY_MESSAGE_LIMIT} messages per day per user. Your quota resets at midnight UTC.`
-        );
+        const msg = `Daily limit reached — ${DAILY_MESSAGE_LIMIT} messages per day per user. Your quota resets at midnight UTC.`;
+        await saveNotification(data.userId, "limit", msg);
+        throw new Error(msg);
       }
       if (!env.NARA_API_KEY) {
         throw new Error(
@@ -148,15 +149,15 @@ export const chat = createServerFn({ method: "POST" })
     } else {
       const globalUsed = await getGlobalUsage("openrouter");
       if (globalUsed >= OPENROUTER_GLOBAL_LIMIT) {
-        throw new Error(
-          `OpenRouter's daily quota (${OPENROUTER_GLOBAL_LIMIT} requests/day) has been reached — file tasks are disabled until midnight UTC. Text chat via NaraRouter still works.`
-        );
+        const msg = `OpenRouter's daily quota was used up by everyone using this app (${OPENROUTER_GLOBAL_LIMIT} requests/day) — file tasks are unavailable until midnight UTC. Text chat via NaraRouter still works.`;
+        await saveNotification(data.userId, "global", msg);
+        throw new Error(msg);
       }
       const used = await getUsage(data.userId, "openrouter");
       if (used >= FILE_DAILY_LIMIT) {
-        throw new Error(
-          `File-task limit reached — ${FILE_DAILY_LIMIT} file requests per day per user. Your quota resets at midnight UTC. Text chat is still available.`
-        );
+        const msg = `File-task limit reached — ${FILE_DAILY_LIMIT} file requests per day per user. Your quota resets at midnight UTC. Text chat is still available.`;
+        await saveNotification(data.userId, "limit", msg);
+        throw new Error(msg);
       }
       if (!env.OPENROUTER_API_KEY) {
         throw new Error(
@@ -167,8 +168,20 @@ export const chat = createServerFn({ method: "POST" })
 
     // Consume quota before hitting the provider so retries can't bypass limits.
     await incrementUsage(data.userId, route);
+    const pendingNotifs: AppNotification[] = [];
     if (route === "openrouter") {
       await incrementUsage(GLOBAL_USER, "openrouter");
+      const [userAfter, globalAfter] = await Promise.all([
+        getUsage(data.userId, "openrouter"),
+        getGlobalUsage("openrouter"),
+      ]);
+      pendingNotifs.push(
+        await saveNotification(
+          data.userId,
+          "info",
+          `File request recorded — ${Math.max(0, FILE_DAILY_LIMIT - userAfter)} of ${FILE_DAILY_LIMIT} left today · ${Math.max(0, OPENROUTER_GLOBAL_LIMIT - globalAfter)} of ${OPENROUTER_GLOBAL_LIMIT} shared free requests left app-wide.`
+        )
+      );
     }
 
     const apiKey = route === "nara" ? env.NARA_API_KEY : env.OPENROUTER_API_KEY;
@@ -322,9 +335,9 @@ export const chat = createServerFn({ method: "POST" })
           if (route === "openrouter" && (res.status === 429 || res.status === 402)) {
             // Provider says we're out — stop ALL OpenRouter requests for today.
             await setGlobalUsage("openrouter", OPENROUTER_GLOBAL_LIMIT);
-            throw new Error(
-              `OpenRouter's daily quota was reached (${res.status}: ${message}) — file tasks are disabled until midnight UTC. Text chat via NaraRouter still works.`
-            );
+            const msg = `OpenRouter's free requests are being used by other users right now (${res.status}) — file tasks are unavailable until midnight UTC. Text chat via NaraRouter still works.`;
+            await saveNotification(data.userId, "global", msg);
+            throw new Error(msg);
           }
           failureOut.message = message;
           continue;
@@ -431,8 +444,10 @@ export const chat = createServerFn({ method: "POST" })
     // status ("Connecting to X…", "X is slow — retrying…") while it happens.
     (async () => {
       try {
+        for (const n of pendingNotifs) await emit({ notify: n });
         let providerRes: Response | null = null;
         const failure = { message: "" };
+        let servedByIndex = 0;
         for (let i = 0; i < modelsToTry.length; i++) {
           const attempts = i === 0 ? 2 : 1; // chosen model gets one retry; fallbacks one shot
           await emit({
@@ -444,7 +459,10 @@ export const chat = createServerFn({ method: "POST" })
           providerRes = await tryModel(modelsToTry[i], attempts, failure, () =>
             emit({ status: `${nameOf(modelsToTry[i])} is slow — retrying…` })
           );
-          if (providerRes) break;
+          if (providerRes) {
+            servedByIndex = i;
+            break;
+          }
           const next = modelsToTry[i + 1];
           if (next) {
             await emit({ status: `${nameOf(modelsToTry[i])} isn't responding — trying ${nameOf(next)}…` });
@@ -455,6 +473,15 @@ export const chat = createServerFn({ method: "POST" })
           throw new Error(
             `${label}: ${failure.message || "no response"} — all free ${label} models failed after retries. Try again in a moment.`
           );
+        }
+        if (servedByIndex > 0) {
+          await emit({
+            notify: await saveNotification(
+              data.userId,
+              "failover",
+              `${nameOf(modelsToTry[0])} wasn't responding — your reply came from ${nameOf(modelsToTry[servedByIndex])} instead.`
+            ),
+          });
         }
 
         const reader = providerRes.body!.getReader();

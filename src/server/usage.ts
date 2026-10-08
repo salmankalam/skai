@@ -26,6 +26,11 @@ export const getDailyUsage = createServerFn({ method: "POST" })
         limit: FILE_DAILY_LIMIT,
         remaining: Math.max(0, FILE_DAILY_LIMIT - fileUsed),
       },
+      fileGlobal: {
+        used: globalUsed,
+        limit: OPENROUTER_GLOBAL_LIMIT,
+        remaining: Math.max(0, OPENROUTER_GLOBAL_LIMIT - globalUsed),
+      },
       fileExhausted: globalUsed >= OPENROUTER_GLOBAL_LIMIT,
     };
   });

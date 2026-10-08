@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { PanelLeftClose, PanelLeftOpen, Zap } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Zap, Bell, CheckCheck } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { ChatArea } from "./components/ChatArea";
 import { ChatInput } from "./components/ChatInput";
@@ -22,8 +22,9 @@ import {
 import { uploadFile, deleteFile } from "./server/files";
 import { chat } from "./server/chat";
 import { getDailyUsage } from "./server/usage";
+import { listNotifications, markAllNotificationsRead } from "./server/notifications";
 import { DAILY_MESSAGE_LIMIT, type DailyUsage } from "./lib/limits";
-import type { Conversation, FileAttachment, Message } from "./lib/types";
+import type { AppNotification, Conversation, FileAttachment, Message } from "./lib/types";
 
 async function fileToBase64(file: File): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -51,13 +52,63 @@ export default function App() {
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [usage, setUsage] = useState<DailyUsage | null>(null);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [toasts, setToasts] = useState<Array<{ id: string; message: string }>>([]);
+  const [notifOpen, setNotifOpen] = useState(false);
   const loadedRef = useRef<Set<string>>(new Set());
+  const toastedIdsRef = useRef<Set<string>>(new Set());
+  const notifPanelRef = useRef<HTMLDivElement>(null);
 
   const refreshUsage = useCallback((uid: string) => {
     getDailyUsage({ data: { userId: uid } })
       .then(setUsage)
       .catch(() => {});
   }, []);
+
+  const pushToast = useCallback((n: AppNotification) => {
+    if (toastedIdsRef.current.has(n.id)) return;
+    toastedIdsRef.current.add(n.id);
+    const toastId = n.id;
+    setToasts((prev) => [...prev.slice(-2), { id: toastId, message: n.message }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== toastId));
+    }, 8000);
+  }, []);
+
+  const refreshNotifications = useCallback(
+    (uid: string) => {
+      listNotifications({ data: { userId: uid } })
+        .then((list) => {
+          setNotifications(list);
+          // Toast the newest unseen notification (e.g. limit blocks decided
+          // server-side before the stream starts).
+          const newest = list[0];
+          if (newest && !newest.read) pushToast(newest);
+        })
+        .catch(() => {});
+    },
+    [pushToast]
+  );
+
+  const handleNotifBell = useCallback(() => {
+    setNotifOpen((open) => {
+      if (!open && userId) {
+        markAllNotificationsRead({ data: { userId } })
+          .then(() => setNotifications((prev) => prev.map((n) => ({ ...n, read: true }))))
+          .catch(() => {});
+      }
+      return !open;
+    });
+  }, [userId]);
+
+  useEffect(() => {
+    if (!notifOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!notifPanelRef.current?.contains(e.target as Node)) setNotifOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [notifOpen]);
 
   useEffect(() => {
     let id = localStorage.getItem("sk-ai-user-id");
@@ -70,7 +121,8 @@ export default function App() {
       .then((convs) => setConversations(convs))
       .catch((e) => setError(errMsg(e)));
     refreshUsage(id);
-  }, [refreshUsage]);
+    refreshNotifications(id);
+  }, [refreshUsage, refreshNotifications]);
 
   useEffect(() => {
     if (window.innerWidth < 768) setSidebarOpen(false);
@@ -213,6 +265,12 @@ export default function App() {
                   setStreamStatus(json.status);
                   continue;
                 }
+                if (json?.notify?.id) {
+                  const n = json.notify as AppNotification;
+                  setNotifications((prev) => [n, ...prev.filter((x) => x.id !== n.id)]);
+                  pushToast(n);
+                  continue;
+                }
                 const delta = json?.choices?.[0]?.delta?.content;
                 if (typeof delta === "string") {
                   if (!acc) setStreamStatus(null);
@@ -246,10 +304,13 @@ export default function App() {
         setStreaming(false);
         setStreamText("");
         setStreamStatus(null);
-        if (userId) refreshUsage(userId);
+        if (userId) {
+          refreshUsage(userId);
+          refreshNotifications(userId);
+        }
       }
     },
-    [userId, streaming, attachments, activeId, conversations, model, updateConv, refreshUsage]
+    [userId, streaming, attachments, activeId, conversations, model, updateConv, refreshUsage, refreshNotifications, pushToast]
   );
 
   const handleNew = useCallback(() => {
@@ -372,7 +433,7 @@ export default function App() {
             <HeaderInfo />
           </div>
 
-          <div className="justify-self-end">
+          <div className="flex items-center justify-end gap-2">
             <span
               className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
                 exhausted
@@ -391,6 +452,80 @@ export default function App() {
                 {exhausted && " · UTC"}
               </span>
             </span>
+
+            <div ref={notifPanelRef} className="relative">
+              <button
+                onClick={handleNotifBell}
+                data-testid="notif-bell"
+                aria-label="Notifications"
+                className="relative rounded-lg p-1.5 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+              >
+                <Bell className="h-5 w-5" />
+                {notifications.some((n) => !n.read) && (
+                  <span
+                    data-testid="notif-badge"
+                    className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-medium text-white"
+                  >
+                    {notifications.filter((n) => !n.read).length}
+                  </span>
+                )}
+              </button>
+              {notifOpen && (
+                <div
+                  data-testid="notif-panel"
+                  className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl shadow-black/40"
+                >
+                  <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
+                    <span className="text-xs font-semibold text-zinc-300">Notifications</span>
+                    <button
+                      onClick={() =>
+                        markAllNotificationsRead({ data: { userId } })
+                          .then(() =>
+                            setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+                          )
+                          .catch(() => {})
+                      }
+                      className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+                    >
+                      <CheckCheck className="h-3 w-3" />
+                      Mark all read
+                    </button>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <p className="px-3 py-6 text-center text-xs text-zinc-500">
+                        No notifications yet — quota updates and model switches appear here.
+                      </p>
+                    ) : (
+                      notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          data-testid="notif-item"
+                          className={`border-b border-zinc-800/60 px-3 py-2.5 text-left last:border-b-0 ${
+                            n.read ? "opacity-60" : ""
+                          }`}
+                        >
+                          <div className="flex items-start gap-2">
+                            {!n.read && (
+                              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400" />
+                            )}
+                            <div className={n.read ? "ml-3.5" : ""}>
+                              <p className="text-xs leading-relaxed text-zinc-300">{n.message}</p>
+                              <p className="mt-1 text-[10px] text-zinc-600">
+                                {new Date(n.createdAt).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -414,6 +549,7 @@ export default function App() {
               disabled={streaming}
               models={modelPool}
               mode={fileMode ? "file" : "text"}
+              globalFileRemaining={usage ? usage.fileGlobal.remaining : null}
             />
           </>
         ) : (
@@ -431,10 +567,26 @@ export default function App() {
               disabled={streaming}
               models={modelPool}
               mode={fileMode ? "file" : "text"}
+              globalFileRemaining={usage ? usage.fileGlobal.remaining : null}
             />
           </>
         )}
       </main>
+
+      <div className="pointer-events-none fixed bottom-20 right-4 z-[60] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            data-testid="toast"
+            className="pointer-events-auto flex items-start gap-2.5 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 shadow-xl shadow-black/40"
+            style={{ animation: "toast-in 200ms ease-out" }}
+          >
+            <Bell className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-400" />
+            <p className="text-xs leading-relaxed text-zinc-300">{t.message}</p>
+          </div>
+        ))}
+      </div>
+      <style>{`@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
     </div>
   );
 }

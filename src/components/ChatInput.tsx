@@ -17,6 +17,7 @@ interface ChatInputProps {
   disabled?: boolean;
   models: ModelOption[];
   mode: "text" | "file";
+  globalFileRemaining: number | null;
 }
 
 function AttachmentIcon({ kind }: { kind: FileAttachment["kind"] }) {
@@ -37,6 +38,7 @@ export function ChatInput({
   disabled,
   models,
   mode,
+  globalFileRemaining,
 }: ChatInputProps) {
   const [value, setValue] = useState("");
   const [dragOver, setDragOver] = useState(false);
@@ -74,7 +76,7 @@ export function ChatInput({
 
   return (
     <div className="border-t border-zinc-800 bg-zinc-950 p-3 sm:p-4">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-4xl">
         {error && (
           <div
             data-testid="chat-error"
@@ -196,8 +198,10 @@ export function ChatInput({
         {mode === "file" && (
           <p className="mt-2 text-center text-[11px] text-amber-500/80">
             File task — your files are answered by OpenRouter&apos;s free models ({FILE_DAILY_LIMIT}
-            /day). Pick one from the selector.{" "}
-            {hasPdf && "PDFs are parsed with the free Cloudflare AI engine."}
+            /day). Pick one from the selector.
+            {globalFileRemaining !== null &&
+              ` · ${globalFileRemaining} of 50 shared free requests left app-wide`}
+            {hasPdf && " PDFs are parsed with the free Cloudflare AI engine."}
           </p>
         )}
 

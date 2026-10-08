@@ -19,5 +19,6 @@ export interface ProviderUsage {
 export interface DailyUsage {
   text: ProviderUsage;
   file: ProviderUsage;
+  fileGlobal: ProviderUsage;
   fileExhausted: boolean;
 }

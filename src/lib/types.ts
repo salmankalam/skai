@@ -25,6 +25,14 @@ export interface Conversation {
 
 export type ProviderRoute = "nara" | "openrouter";
 
+export interface AppNotification {
+  id: string;
+  kind: "limit" | "global" | "failover" | "info";
+  message: string;
+  createdAt: number;
+  read: boolean;
+}
+
 export interface ModelOption {
   id: string;
   name: string;

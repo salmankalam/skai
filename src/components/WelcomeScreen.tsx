@@ -19,7 +19,8 @@ export function WelcomeScreen({ onPromptClick, usage, fileMode }: WelcomeScreenP
   if (usage?.fileExhausted) {
     usageText = (
       <span className="text-amber-500">
-        OpenRouter quota reached — file tasks disabled until midnight UTC
+        OpenRouter quota reached — free requests used up by all users; file tasks disabled until
+        midnight UTC
       </span>
     );
   } else if (fileMode) {
