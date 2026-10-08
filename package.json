@@ -11,9 +11,9 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "models:check": "node scripts/check-models.mjs",
-    "test:e2e": "node e2e/core-flows.mjs && node e2e/features.mjs",
-    "test:e2e:core": "node e2e/core-flows.mjs",
-    "test:e2e:features": "node e2e/features.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:core": "playwright test e2e/core.spec.ts",
+    "test:e2e:features": "playwright test e2e/features.spec.ts",
     "db:migrate": "wrangler d1 migrations apply sk-ai-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply sk-ai-db --remote",
     "typegen": "wrangler types"
@@ -30,11 +30,11 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.54.0",
+    "@playwright/test": "^1.64.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^4.7.0",
-    "puppeteer-core": "^25.12.0",
     "typescript": "^5.7.0",
     "vite": "^7.0.0",
     "wrangler": "^4.148.0"
