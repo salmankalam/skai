@@ -11,4 +11,11 @@ export default defineConfig({
     viteReact(),
     tailwindcss(),
   ],
+  server: {
+    watch: {
+      // Don't watch e2e browser profiles (Edge writes HTML files there mid-test,
+      // which otherwise triggers full page reloads) or log files.
+      ignored: ["**/node_modules/**", "**/.git/**", "**/e2e/**", "**/*.log", "**/.wrangler/**"],
+    },
+  },
 });

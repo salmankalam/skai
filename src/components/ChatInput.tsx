@@ -140,19 +140,24 @@ export function ChatInput({
               >
                 <Paperclip className="h-4 w-4" />
               </button>
-              {fileTipOpen && (
-                <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-64 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-left shadow-xl shadow-black/40">
-                  <p className="text-xs font-semibold text-zinc-200">Drop any file here</p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">
-                    Text &amp; code (.txt, .md, .json, .py, .js), images (.png, .jpg, .webp) or
-                    PDF (.pdf) — or drag &amp; drop straight into the box.
-                  </p>
-                  <p className="mt-1 text-[11px] text-zinc-500">
-                    Up to {MAX_FILE_SIZE / 1024 / 1024} MB per file.
-                  </p>
-                  <div className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1 rotate-45 border-b border-r border-zinc-700 bg-zinc-900" />
-                </div>
-              )}
+              <div
+                role="tooltip"
+                className={`absolute bottom-full left-1/2 z-50 mb-2 w-72 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-left shadow-xl shadow-black/40 transition-all ease-out ${
+                  fileTipOpen
+                    ? "translate-y-0 scale-100 opacity-100 delay-0 duration-200"
+                    : "pointer-events-none translate-y-1 scale-95 opacity-0 delay-150 duration-150"
+                }`}
+              >
+                <p className="text-sm font-semibold text-zinc-200">Drop any file here</p>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-zinc-400">
+                  Text &amp; code (.txt, .md, .json, .py, .js), images (.png, .jpg, .webp) or
+                  PDF (.pdf) — or drag &amp; drop straight into the box.
+                </p>
+                <p className="mt-1.5 text-[13px] text-zinc-500">
+                  Up to {MAX_FILE_SIZE / 1024 / 1024} MB per file.
+                </p>
+                <div className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-1 rotate-45 border-b border-r border-zinc-700 bg-zinc-900" />
+              </div>
             </div>
             <input
               ref={fileInputRef}

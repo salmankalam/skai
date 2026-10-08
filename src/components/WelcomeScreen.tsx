@@ -1,9 +1,5 @@
 import { Sparkles, Code, BookOpen, Lightbulb, Zap } from "lucide-react";
-import {
-  DAILY_MESSAGE_LIMIT,
-  FILE_DAILY_LIMIT,
-  type DailyUsage,
-} from "../lib/limits";
+import { FILE_DAILY_LIMIT, type DailyUsage } from "../lib/limits";
 
 interface WelcomeScreenProps {
   onPromptClick: (prompt: string) => void;
@@ -18,7 +14,7 @@ const SUGGESTIONS = [
 ];
 
 export function WelcomeScreen({ onPromptClick, usage, fileMode }: WelcomeScreenProps) {
-  let usageText: React.ReactNode;
+  let usageText: React.ReactNode = null;
 
   if (usage?.fileExhausted) {
     usageText = (
@@ -43,25 +39,6 @@ export function WelcomeScreen({ onPromptClick, usage, fileMode }: WelcomeScreenP
     ) : (
       <span className="text-amber-500">
         File limit reached ({usage.file.limit}/day) — resets at midnight UTC
-      </span>
-    );
-  } else {
-    usageText = !usage ? (
-      <>
-        Free plan · <span className="font-medium text-zinc-300">{DAILY_MESSAGE_LIMIT} messages</span>{" "}
-        per day
-      </>
-    ) : usage.text.remaining > 0 ? (
-      <>
-        Free plan ·{" "}
-        <span className="font-medium text-zinc-300">
-          {usage.text.remaining} of {usage.text.limit}
-        </span>{" "}
-        messages left today
-      </>
-    ) : (
-      <span className="text-amber-500">
-        Daily limit reached ({usage.text.limit}/day) — resets at midnight UTC
       </span>
     );
   }
@@ -90,18 +67,12 @@ export function WelcomeScreen({ onPromptClick, usage, fileMode }: WelcomeScreenP
           ))}
         </div>
 
-        <div className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs text-zinc-500">
-          <Zap className="h-3.5 w-3.5 text-violet-400" />
-          {usageText}
-        </div>
-
-        <p className="mx-auto mt-6 max-w-md text-[11px] leading-relaxed text-zinc-600">
-          <span className="font-semibold text-zinc-500">Legal notice:</span> SK-AI is provided
-          &quot;as is&quot; without warranties of any kind. To the fullest extent permitted by law,
-          the application shall not be held liable for any data breach, unauthorized access, data
-          loss, or other security incident arising from or related to your use of this service. You
-          remain solely responsible for any information you submit through this application.
-        </p>
+        {usageText !== null && (
+          <div className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs text-zinc-500">
+            <Zap className="h-3.5 w-3.5 text-violet-400" />
+            {usageText}
+          </div>
+        )}
       </div>
     </div>
   );
