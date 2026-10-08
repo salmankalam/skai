@@ -16,7 +16,7 @@ function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === "user";
 
   return (
-    <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
+    <div data-role={message.role} className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
       <div
         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
           isUser ? "bg-violet-600" : "bg-zinc-800"

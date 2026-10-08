@@ -19,10 +19,10 @@ try {
   ok("loads new UI", body1.includes("Welcome to SK-AI") && !body1.includes("React Performance Tips"));
   ok("sidebar empty state (D1)", body1.includes("No conversations yet"));
   const modelBtn = await page.evaluate(() => {
-    const b = [...document.querySelectorAll("button")].find((x) => x.textContent.includes("Gemma"));
+    const b = [...document.querySelectorAll("button")].find((x) => x.textContent.includes("Agnes"));
     return b ? b.textContent.trim() : null;
   });
-  ok("default model = Gemma 4 31B", !!modelBtn, modelBtn ?? "not found");
+  ok("default model = Agnes 2.5 Flash (NaraRouter)", !!modelBtn, modelBtn ?? "not found");
   const badgeOk = await page
     .waitForFunction(() => document.body.innerText.includes("25 of 25"), { timeout: 15000 })
     .then(() => true)
@@ -30,14 +30,14 @@ try {
   ok("usage badge visible", badgeOk);
 
   await page.evaluate(() => {
-    const b = [...document.querySelectorAll("button")].find((x) => x.textContent.includes("Gemma"));
+    const b = [...document.querySelectorAll("button")].find((x) => x.textContent.includes("Agnes"));
     b.click();
   });
   await page.waitForFunction(() => document.body.innerText.includes("Select Model"), { timeout: 5000 }).catch(() => {});
   const menuText = await page.evaluate(() => document.body.innerText);
-  const freeNames = ["Free Router", "Gemma 4 31B", "Gemma 4 26B", "Inkling", "Nemotron", "North Mini Code"];
+  const freeNames = ["Agnes 2.5 Flash", "Agnes 3 Flash", "Exo Stealth", "Jev", "Laguna S 2.1"];
   const missing = freeNames.filter((n) => !menuText.includes(n));
-  ok("dropdown lists free models", missing.length === 0, missing.length ? `missing: ${missing}` : "all present");
+  ok("dropdown lists NaraRouter free models", missing.length === 0, missing.length ? `missing: ${missing}` : "all present");
   ok("no paid models in dropdown", !/GPT-4|Claude|MiniMax M3|Qwen3\.8/.test(menuText));
   await shot(page, "core-1-models.png");
   await page.mouse.click(700, 100);
@@ -53,11 +53,18 @@ try {
 
   await page.type('textarea[placeholder*="Message SK-AI"]', "Hello from core e2e");
   await page.keyboard.press("Enter");
-  const gotError = await page
-    .waitForFunction(() => /OPENROUTER|error|failed/i.test(document.body.innerText), { timeout: 30000 })
+  const chatOutcome = await page
+    .waitForFunction(
+      () =>
+        document.querySelector('[data-role="assistant"]') ||
+        /OPENROUTER_API_KEY is not set|File-task limit|daily quota|OpenRouter error|Only free models/i.test(
+          document.body.innerText
+        ),
+      { timeout: 30000 }
+    )
     .then(() => true)
     .catch(() => false);
-  ok("chat error surfaced without API key", gotError);
+  ok("file send reaches OpenRouter (error or response)", chatOutcome);
   const afterSend = await page.evaluate(() => document.body.innerText);
   ok("conversation created in sidebar (D1 insert)", afterSend.includes("Hello from core e2e"));
   await shot(page, "core-3-error.png");

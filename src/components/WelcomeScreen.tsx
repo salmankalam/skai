@@ -1,9 +1,14 @@
 import { Sparkles, Code, BookOpen, Lightbulb, Zap } from "lucide-react";
-import { DAILY_MESSAGE_LIMIT, type DailyUsage } from "../lib/limits";
+import {
+  DAILY_MESSAGE_LIMIT,
+  FILE_DAILY_LIMIT,
+  type DailyUsage,
+} from "../lib/limits";
 
 interface WelcomeScreenProps {
   onPromptClick: (prompt: string) => void;
   usage: DailyUsage | null;
+  fileMode: boolean;
 }
 
 const SUGGESTIONS = [
@@ -12,25 +17,54 @@ const SUGGESTIONS = [
   { icon: Lightbulb, label: "Brainstorm ideas", prompt: "Give me project ideas for a chat app" },
 ];
 
-export function WelcomeScreen({ onPromptClick, usage }: WelcomeScreenProps) {
-  const usageText =
-    usage === null ? (
+export function WelcomeScreen({ onPromptClick, usage, fileMode }: WelcomeScreenProps) {
+  let usageText: React.ReactNode;
+
+  if (usage?.fileExhausted) {
+    usageText = (
+      <span className="text-amber-500">
+        OpenRouter quota reached — file tasks disabled until midnight UTC
+      </span>
+    );
+  } else if (fileMode) {
+    usageText = !usage ? (
       <>
-        Free plan · <span className="font-medium text-zinc-300">{DAILY_MESSAGE_LIMIT} messages</span> per day
+        File tasks · <span className="font-medium text-zinc-300">{FILE_DAILY_LIMIT} requests</span>{" "}
+        per day
       </>
-    ) : usage.remaining > 0 ? (
+    ) : usage.file.remaining > 0 ? (
+      <>
+        File tasks ·{" "}
+        <span className="font-medium text-zinc-300">
+          {usage.file.remaining} of {usage.file.limit}
+        </span>{" "}
+        file requests left today
+      </>
+    ) : (
+      <span className="text-amber-500">
+        File limit reached ({usage.file.limit}/day) — resets at midnight UTC
+      </span>
+    );
+  } else {
+    usageText = !usage ? (
+      <>
+        Free plan · <span className="font-medium text-zinc-300">{DAILY_MESSAGE_LIMIT} messages</span>{" "}
+        per day
+      </>
+    ) : usage.text.remaining > 0 ? (
       <>
         Free plan ·{" "}
         <span className="font-medium text-zinc-300">
-          {usage.remaining} of {usage.limit}
+          {usage.text.remaining} of {usage.text.limit}
         </span>{" "}
         messages left today
       </>
     ) : (
       <span className="text-amber-500">
-        Daily limit reached ({usage.limit}/day) — resets at midnight UTC
+        Daily limit reached ({usage.text.limit}/day) — resets at midnight UTC
       </span>
     );
+  }
 
   return (
     <div className="flex flex-1 items-center justify-center p-4 sm:p-8">
@@ -60,6 +94,14 @@ export function WelcomeScreen({ onPromptClick, usage }: WelcomeScreenProps) {
           <Zap className="h-3.5 w-3.5 text-violet-400" />
           {usageText}
         </div>
+
+        <p className="mx-auto mt-6 max-w-md text-[11px] leading-relaxed text-zinc-600">
+          <span className="font-semibold text-zinc-500">Legal notice:</span> SK-AI is provided
+          &quot;as is&quot; without warranties of any kind. To the fullest extent permitted by law,
+          the application shall not be held liable for any data breach, unauthorized access, data
+          loss, or other security incident arising from or related to your use of this service. You
+          remain solely responsible for any information you submit through this application.
+        </p>
       </div>
     </div>
   );

@@ -1,81 +1,120 @@
-import type { ModelOption } from "./types";
+import type { ModelOption, ProviderRoute } from "./types";
 
 /**
- * Free models only — every id either ends in `:free` or is OpenRouter's
- * free-models router. Verified against https://openrouter.ai/api/v1/models
- * (pricing.prompt === "0"). Never add paid models here.
+ * FREE models only — never add paid models anywhere.
+ *
+ * NaraRouter free-tier models for text chat. Aliases below are best-effort
+ * slugs of the published free plan (Agnes 2.5 Flash, Agnes 3 Flash, Exo
+ * Stealth, Jev, Laguna S 2.1). Verify the real ids with
+ * `npm run models:check` once NARA_API_KEY is set (probes GET /v1/models).
  */
-export const AVAILABLE_MODELS: ModelOption[] = [
+export const NARA_FREE_MODELS: ModelOption[] = [
+  {
+    id: "agnes-2.5-flash",
+    name: "Agnes 2.5 Flash",
+    provider: "NaraRouter",
+    route: "nara",
+    description: "Fast free model for everyday chat",
+    vision: false,
+  },
+  {
+    id: "agnes-3-flash",
+    name: "Agnes 3 Flash",
+    provider: "NaraRouter",
+    route: "nara",
+    description: "Newest Agnes — quick, free responses",
+    vision: false,
+  },
+  {
+    id: "exo-stealth",
+    name: "Exo Stealth",
+    provider: "NaraRouter",
+    route: "nara",
+    description: "Free NaraRouter model",
+    vision: false,
+  },
+  {
+    id: "jev",
+    name: "Jev",
+    provider: "NaraRouter",
+    route: "nara",
+    description: "Free NaraRouter model",
+    vision: false,
+  },
+  {
+    id: "laguna-s-2.1",
+    name: "Laguna S 2.1",
+    provider: "NaraRouter",
+    route: "nara",
+    description: "Free NaraRouter model",
+    vision: false,
+  },
+];
+
+/**
+ * OpenRouter free multimodal models — the ONLY models allowed for
+ * file-based tasks (images, PDFs, text files). Verified against
+ * https://openrouter.ai/api/v1/models (pricing.prompt === "0").
+ */
+export const OPENROUTER_FILE_MODELS: ModelOption[] = [
   {
     id: "openrouter/free",
     name: "Free Router",
     provider: "OpenRouter",
+    route: "openrouter",
     description: "Auto-picks a free model that fits your request",
     vision: true,
   },
   {
     id: "google/gemma-4-31b-it:free",
     name: "Gemma 4 31B",
-    provider: "Google",
+    provider: "OpenRouter",
+    route: "openrouter",
     description: "Multimodal — text, images, video. 262K context",
     vision: true,
   },
   {
     id: "google/gemma-4-26b-a4b-it:free",
     name: "Gemma 4 26B MoE",
-    provider: "Google",
+    provider: "OpenRouter",
+    route: "openrouter",
     description: "Fast multimodal mixture-of-experts. 262K context",
     vision: true,
   },
   {
     id: "thinkingmachines/inkling:free",
     name: "Inkling",
-    provider: "Thinking Machines",
+    provider: "OpenRouter",
+    route: "openrouter",
     description: "Vision + audio input. 1M context",
     vision: true,
   },
   {
     id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
     name: "Nemotron 3 Nano Omni",
-    provider: "NVIDIA",
+    provider: "OpenRouter",
+    route: "openrouter",
     description: "Reasoning across text, image, video, audio. 256K",
     vision: true,
   },
-  {
-    id: "nvidia/nemotron-3-ultra-550b-a55b:free",
-    name: "Nemotron 3 Ultra",
-    provider: "NVIDIA",
-    description: "Frontier open model. 1M context",
-    vision: false,
-  },
-  {
-    id: "nvidia/nemotron-3-super-120b-a12b:free",
-    name: "Nemotron 3 Super",
-    provider: "NVIDIA",
-    description: "Strong general purpose. 262K context",
-    vision: false,
-  },
-  {
-    id: "cohere/north-mini-code:free",
-    name: "North Mini Code",
-    provider: "Cohere",
-    description: "Code-focused assistant. 256K context",
-    vision: false,
-  },
 ];
 
-export const DEFAULT_MODEL = "google/gemma-4-31b-it:free";
+export const ALL_MODELS: ModelOption[] = [...NARA_FREE_MODELS, ...OPENROUTER_FILE_MODELS];
 
-export const VISION_FALLBACK_MODEL = "google/gemma-4-31b-it:free";
+export const TEXT_MODELS = NARA_FREE_MODELS;
+export const FILE_MODELS = OPENROUTER_FILE_MODELS;
+
+export const DEFAULT_MODEL = NARA_FREE_MODELS[0].id;
+export const FILE_DEFAULT_MODEL = "google/gemma-4-31b-it:free";
 
 export function isFreeModel(id: string): boolean {
-  return AVAILABLE_MODELS.some((m) => m.id === id);
+  return ALL_MODELS.some((m) => m.id === id);
 }
 
-export function hasVision(id: string): boolean {
-  return AVAILABLE_MODELS.find((m) => m.id === id)?.vision ?? false;
+export function getRoute(id: string): ProviderRoute | null {
+  return ALL_MODELS.find((m) => m.id === id)?.route ?? null;
 }
 
 export function getModel(id: string): ModelOption {
-  return AVAILABLE_MODELS.find((m) => m.id === id) ?? AVAILABLE_MODELS[1];
+  return ALL_MODELS.find((m) => m.id === id) ?? ALL_MODELS[0];
 }

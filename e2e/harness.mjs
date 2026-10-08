@@ -47,7 +47,7 @@ export function sql(command) {
 }
 
 export function clearUser(userId) {
-  sql(`DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE user_id='${userId}'); DELETE FROM files WHERE user_id='${userId}'; DELETE FROM conversations WHERE user_id='${userId}';`);
+  sql(`DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE user_id='${userId}'); DELETE FROM files WHERE user_id='${userId}'; DELETE FROM conversations WHERE user_id='${userId}'; DELETE FROM provider_usage WHERE user_id='${userId}';`);
 }
 
 export async function waitForDevServer() {

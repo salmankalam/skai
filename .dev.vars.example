@@ -1,2 +1,7 @@
-# Copy to .dev.vars for local dev. For production: wrangler secret put OPENROUTER_API_KEY
-OPENROUTER_API_KEY=sk-or-v1-your-key-here
+# Copy to .dev.vars for local dev.
+# NaraRouter (text chat): https://router.bynara.id — keys look like sk-nry-...
+#   production: wrangler secret put NARA_API_KEY
+NARA_API_KEY=
+# OpenRouter (file-based tasks): https://openrouter.ai/settings/keys
+#   production: wrangler secret put OPENROUTER_API_KEY
+OPENROUTER_API_KEY=

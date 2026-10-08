@@ -1,12 +1,26 @@
 import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
-import { DEFAULT_MODEL, VISION_FALLBACK_MODEL, hasVision, isFreeModel } from "../lib/models";
+import { ALL_MODELS, isFreeModel } from "../lib/models";
 import { MAX_TEXT_INJECT_CHARS, detectKind } from "../lib/files";
-import { DAILY_MESSAGE_LIMIT } from "../lib/limits";
-import { countTodayMessages } from "./daily-limit";
+import { DAILY_MESSAGE_LIMIT, FILE_DAILY_LIMIT, OPENROUTER_GLOBAL_LIMIT, GLOBAL_USER } from "../lib/limits";
+import { getUsage, getGlobalUsage, incrementUsage, setGlobalUsage } from "./provider-usage";
 import type { FileAttachment } from "../lib/types";
 
+const NARA_URL = "https://router.bynara.id/v1/chat/completions";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+/** Extracts a readable message from either provider's error envelope. */
+async function providerErrorMessage(res: Response): Promise<string> {
+  const text = await res.text().catch(() => "");
+  try {
+    const json = JSON.parse(text);
+    const msg = json?.error?.message;
+    if (typeof msg === "string" && msg) return msg.slice(0, 300);
+  } catch {
+    // not JSON — fall through
+  }
+  return text.slice(0, 300) || `HTTP ${res.status}`;
+}
 
 interface ChatRequest {
   userId: string;
@@ -105,21 +119,59 @@ export const chat = createServerFn({ method: "POST" })
   .validator((data: ChatRequest) => data)
   .handler(async ({ data }): Promise<Response> => {
     if (!data.content.trim()) throw new Error("Message is empty.");
-    if (!isFreeModel(data.model)) throw new Error("Only free models are allowed.");
 
-    const usedToday = await countTodayMessages(data.userId);
-    if (usedToday >= DAILY_MESSAGE_LIMIT) {
+    const modelEntry = ALL_MODELS.find((m) => m.id === data.model);
+    if (!isFreeModel(data.model) || !modelEntry) {
+      throw new Error("Only free models are allowed.");
+    }
+    const route = modelEntry.route;
+    const hasAttachments = data.attachmentIds.length > 0;
+
+    if (hasAttachments && route !== "openrouter") {
       throw new Error(
-        `Daily limit reached — ${DAILY_MESSAGE_LIMIT} messages per day per user. Your quota resets at midnight UTC.`
+        "Files are answered by OpenRouter's file-capable free models — choose one from the model selector."
       );
     }
 
-    const apiKey = env.OPENROUTER_API_KEY;
-    if (!apiKey) {
-      throw new Error(
-        "OPENROUTER_API_KEY is not set. Add it to .dev.vars for local dev, or run `wrangler secret put OPENROUTER_API_KEY` for production."
-      );
+    if (route === "nara") {
+      const used = await getUsage(data.userId, "nara");
+      if (used >= DAILY_MESSAGE_LIMIT) {
+        throw new Error(
+          `Daily limit reached — ${DAILY_MESSAGE_LIMIT} messages per day per user. Your quota resets at midnight UTC.`
+        );
+      }
+      if (!env.NARA_API_KEY) {
+        throw new Error(
+          "NARA_API_KEY is not set. Add it to .dev.vars for local dev, or run `wrangler secret put NARA_API_KEY` for production."
+        );
+      }
+    } else {
+      const globalUsed = await getGlobalUsage("openrouter");
+      if (globalUsed >= OPENROUTER_GLOBAL_LIMIT) {
+        throw new Error(
+          `OpenRouter's daily quota (${OPENROUTER_GLOBAL_LIMIT} requests/day) has been reached — file tasks are disabled until midnight UTC. Text chat via NaraRouter still works.`
+        );
+      }
+      const used = await getUsage(data.userId, "openrouter");
+      if (used >= FILE_DAILY_LIMIT) {
+        throw new Error(
+          `File-task limit reached — ${FILE_DAILY_LIMIT} file requests per day per user. Your quota resets at midnight UTC. Text chat is still available.`
+        );
+      }
+      if (!env.OPENROUTER_API_KEY) {
+        throw new Error(
+          "OPENROUTER_API_KEY is not set — file tasks are unavailable. Add it to .dev.vars for local dev, or run `wrangler secret put OPENROUTER_API_KEY` for production."
+        );
+      }
     }
+
+    // Consume quota before hitting the provider so retries can't bypass limits.
+    await incrementUsage(data.userId, route);
+    if (route === "openrouter") {
+      await incrementUsage(GLOBAL_USER, "openrouter");
+    }
+
+    const apiKey = route === "nara" ? env.NARA_API_KEY : env.OPENROUTER_API_KEY;
 
     const fileRows = await loadFileRows(data.userId, data.attachmentIds);
     const attachments = fileRows.map(
@@ -132,10 +184,7 @@ export const chat = createServerFn({ method: "POST" })
       })
     );
 
-    const hasImages = fileRows.some((f) => f.kind === "image");
     const hasPdf = fileRows.some((f) => f.kind === "pdf");
-    const model =
-      hasImages && !hasVision(data.model) ? VISION_FALLBACK_MODEL : data.model;
 
     // Build the user turn: [text-file contexts] [prompt] [images] [pdfs]
     const textContext = await loadTextContext(fileRows);
@@ -216,30 +265,41 @@ export const chat = createServerFn({ method: "POST" })
 
     // Only free tools: `cloudflare-ai` PDF engine is free (never mistral-ocr).
     const body = JSON.stringify({
-      model,
+      model: data.model,
       stream: true,
       messages: history,
-      ...(hasPdf
+      ...(route === "openrouter" && hasPdf
         ? { plugins: [{ id: "file-parser", pdf: { engine: "cloudflare-ai" } }] }
         : {}),
     });
 
-    const orRes = await fetch(OPENROUTER_URL, {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    };
+    if (route === "openrouter") headers["X-Title"] = "SK-AI";
+
+    const providerRes = await fetch(route === "nara" ? NARA_URL : OPENROUTER_URL, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "X-Title": "SK-AI",
-      },
+      headers,
       body,
     });
 
-    if (!orRes.ok || !orRes.body) {
-      const errText = await orRes.text().catch(() => "");
-      throw new Error(`OpenRouter error (${orRes.status}): ${errText.slice(0, 300)}`);
+    if (!providerRes.ok || !providerRes.body) {
+      const message = await providerErrorMessage(providerRes);
+      if (route === "openrouter" && (providerRes.status === 429 || providerRes.status === 402)) {
+        // Provider says we're out — stop ALL OpenRouter requests for today.
+        await setGlobalUsage("openrouter", OPENROUTER_GLOBAL_LIMIT);
+        throw new Error(
+          `OpenRouter's daily quota was reached (${providerRes.status}: ${message}) — file tasks are disabled until midnight UTC. Text chat via NaraRouter still works.`
+        );
+      }
+      throw new Error(
+        `${route === "nara" ? "NaraRouter" : "OpenRouter"} error (${providerRes.status}): ${message}`
+      );
     }
 
-    const upstream = orRes.body;
+    const upstream = providerRes.body;
     const { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
     const accumulator = createDeltaAccumulator();

@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import {
   waitForDevServer,
   launchBrowser,
@@ -10,10 +11,12 @@ import {
 } from "./harness.mjs";
 
 const USER = "e2e-limit-user";
+const TODAY = new Date().toISOString().slice(0, 10);
 const { ok, finish } = createResults();
 
 await waitForDevServer();
 clearUser(USER);
+sql(`DELETE FROM provider_usage WHERE user_id='__global__';`);
 
 const { browser, close } = await launchBrowser(9461);
 try {
@@ -41,12 +44,9 @@ try {
   const tipOut = await page.evaluate(() => document.body.innerText);
   ok("tooltip hides on hover-out", !tipOut.includes("Drop any file here"));
 
-  const now = Date.now();
-  let seed = `INSERT INTO conversations (id, user_id, title, model, created_at, updated_at) VALUES ('e2e-limit-conv','${USER}','Limit test','google/gemma-4-31b-it:free',${now},${now});`;
-  for (let i = 0; i < 25; i++) {
-    seed += `INSERT INTO messages (id, conversation_id, role, content, attachments, timestamp) VALUES ('e2e-msg-${i}','e2e-limit-conv','user','seed ${i}',NULL,${now});`;
-  }
-  sql(seed);
+  sql(
+    `INSERT INTO provider_usage (user_id, provider, day, count) VALUES ('${USER}','nara','${TODAY}',25) ON CONFLICT(user_id, provider, day) DO UPDATE SET count = 25;`
+  );
 
   await page.reload({ waitUntil: "networkidle2", timeout: 30000 });
   await page.waitForFunction(() => document.body.innerText.includes("Daily limit reached"), { timeout: 15000 });
@@ -95,7 +95,7 @@ try {
 
   await page.evaluate(() => {
     const b = [...document.querySelectorAll("button")].find(
-      (x) => /Gemma|Nemotron|Free Router|Inkling|North/.test(x.textContent) && x.closest(".relative")
+      (x) => /Agnes|Exo|Jev|Laguna/.test(x.textContent) && x.closest(".relative")
     );
     b?.click();
   });
@@ -110,11 +110,110 @@ try {
   });
   ok("mobile: model dropdown fits viewport", !!dd && dd.left >= 0 && dd.right <= 375, JSON.stringify(dd));
   await shot(page, "feat-6-mobile-dropdown.png");
+
+  // ---- file mode: attachments route to OpenRouter's free file-capable models ----
+  await page.setViewport({ width: 1400, height: 900 });
+  await page.reload({ waitUntil: "networkidle2", timeout: 30000 });
+  await page.waitForSelector('textarea[placeholder*="Message SK-AI"]', { timeout: 15000 });
+
+  const sample = `${process.env.TEMP ?? "/tmp"}/skai-feat-file.txt`;
+  fs.writeFileSync(sample, "file mode e2e sample");
+  const attachFile = async () => {
+    const input = await page.$('input[type="file"]');
+    await input.uploadFile(sample);
+    await page.waitForFunction(() => document.body.innerText.includes("skai-feat-file.txt"), {
+      timeout: 8000,
+    });
+  };
+
+  await attachFile();
+  await page.waitForFunction(() => document.body.innerText.includes("file requests left today"), {
+    timeout: 15000,
+  });
+  const fm = await page.evaluate(() => document.body.innerText);
+  ok("file mode badge shows file quota (5 of 5)", fm.includes("5 of 5"), "file requests left today");
+  ok("file mode notice mentions OpenRouter", fm.includes("File task") && fm.includes("OpenRouter"));
+
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll("button")].find(
+      (x) => /Gemma|Inkling|Nemotron|Free Router/.test(x.textContent) && x.closest(".relative")
+    );
+    b?.click();
+  });
+  // header is text-transform:uppercase, so innerText comes back uppercased
+  await page.waitForFunction(
+    () => document.body.innerText.includes("FILE TASK — MODELS THAT SUPPORT FILES"),
+    { timeout: 5000 }
+  );
+  const fmMenu = await page.evaluate(() => document.body.innerText);
+  ok(
+    "file dropdown lists OpenRouter file models",
+    fmMenu.includes("Gemma 4 31B") && fmMenu.includes("Inkling") && fmMenu.includes("OpenRouter")
+  );
+  ok("file dropdown hides Nara text models", !fmMenu.includes("Agnes 2.5 Flash"));
+  await shot(page, "feat-7-file-models.png");
+  await page.mouse.click(700, 100);
+  await sleep(300);
+
+  // per-user file limit: 5/day
+  sql(
+    `INSERT INTO provider_usage (user_id, provider, day, count) VALUES ('${USER}','openrouter','${TODAY}',5) ON CONFLICT(user_id, provider, day) DO UPDATE SET count = 5;`
+  );
+  await page.reload({ waitUntil: "networkidle2", timeout: 30000 });
+  await page.waitForSelector('textarea[placeholder*="Message SK-AI"]', { timeout: 15000 });
+  await attachFile();
+  await page.waitForFunction(() => document.body.innerText.includes("File limit reached"), {
+    timeout: 15000,
+  });
+  ok("file badge shows 5/day limit reached", true);
+  await shot(page, "feat-8-file-limit-badge.png");
+  await page.type('textarea[placeholder*="Message SK-AI"]', "should be file-blocked");
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => document.body.innerText.includes("File-task limit reached"), {
+    timeout: 20000,
+  });
+  ok("file send blocked at 5/day (server-enforced)", true);
+  await shot(page, "feat-9-file-limit-error.png");
+
+  // global OpenRouter quota: 50/day blocks ALL file requests
+  sql(
+    `INSERT INTO provider_usage (user_id, provider, day, count) VALUES ('__global__','openrouter','${TODAY}',50) ON CONFLICT(user_id, provider, day) DO UPDATE SET count = 50;`
+  );
+  await page.reload({ waitUntil: "networkidle2", timeout: 30000 });
+  await page.waitForSelector('textarea[placeholder*="Message SK-AI"]', { timeout: 15000 });
+  await attachFile();
+  await page.waitForFunction(() => document.body.innerText.includes("OpenRouter quota reached"), {
+    timeout: 15000,
+  });
+  ok("badge shows OpenRouter quota exhausted", true);
+  await page.type('textarea[placeholder*="Message SK-AI"]', "global block test");
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => document.body.innerText.includes("OpenRouter's daily quota"), {
+    timeout: 20000,
+  });
+  const gq = await page.evaluate(() => document.body.innerText);
+  ok("global quota blocks all OpenRouter requests", gq.includes("Text chat via NaraRouter still works"));
+  await shot(page, "feat-10-global-quota.png");
+
+  // NaraRouter text chat keeps working while OpenRouter is blocked
+  // (nara usage is at 25 from the earlier seed → nara limit error, proving the nara path)
+  await page.type('textarea[placeholder*="Message SK-AI"]', "text while openrouter blocked");
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => document.body.innerText.includes("messages per day per user"), {
+    timeout: 20000,
+  });
+  const afterText = await page.evaluate(() => document.body.innerText);
+  ok(
+    "nara text path unaffected by OpenRouter block",
+    !afterText.includes("OpenRouter's daily quota")
+  );
+  await shot(page, "feat-11-text-still-works.png");
 } catch (e) {
   ok("script completed without exception", false, String(e).slice(0, 300));
 } finally {
   await close();
   clearUser(USER);
+  sql(`DELETE FROM provider_usage WHERE user_id='__global__';`);
   const passed = finish();
   process.exit(passed ? 0 : 1);
 }

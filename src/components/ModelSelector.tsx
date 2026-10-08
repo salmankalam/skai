@@ -1,17 +1,19 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, Check } from "lucide-react";
-import { AVAILABLE_MODELS } from "../lib/models";
+import type { ModelOption } from "../lib/types";
 
 interface ModelSelectorProps {
   value: string;
   onChange: (modelId: string) => void;
+  models: ModelOption[];
+  mode: "text" | "file";
 }
 
-export function ModelSelector({ value, onChange }: ModelSelectorProps) {
+export function ModelSelector({ value, onChange, models, mode }: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const selected = AVAILABLE_MODELS.find((m) => m.id === value) ?? AVAILABLE_MODELS[0];
+  const selected = models.find((m) => m.id === value) ?? models[0];
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -38,9 +40,9 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
       {open && (
         <div className="absolute bottom-full left-0 z-50 mb-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-zinc-700 bg-zinc-900 py-1 shadow-xl shadow-black/40">
           <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-            Select Model
+            {mode === "file" ? "File task — models that support files" : "Select Model"}
           </p>
-          {AVAILABLE_MODELS.map((model) => (
+          {models.map((model) => (
             <button
               key={model.id}
               onClick={() => {

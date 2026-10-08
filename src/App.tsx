@@ -5,7 +5,12 @@ import { Sidebar } from "./components/Sidebar";
 import { ChatArea } from "./components/ChatArea";
 import { ChatInput } from "./components/ChatInput";
 import { WelcomeScreen } from "./components/WelcomeScreen";
-import { DEFAULT_MODEL } from "./lib/models";
+import {
+  DEFAULT_MODEL,
+  FILE_DEFAULT_MODEL,
+  NARA_FREE_MODELS,
+  OPENROUTER_FILE_MODELS,
+} from "./lib/models";
 import { MAX_FILE_SIZE, detectKind } from "./lib/files";
 import {
   listConversations,
@@ -71,6 +76,10 @@ export default function App() {
 
   const activeConv = conversations.find((c) => c.id === activeId) ?? null;
 
+  // Files → OpenRouter's free file-capable models; pure text → NaraRouter's free models.
+  const fileMode = attachments.length > 0;
+  const modelPool = fileMode ? OPENROUTER_FILE_MODELS : NARA_FREE_MODELS;
+
   const updateConv = useCallback((id: string, fn: (c: Conversation) => Conversation) => {
     setConversations((prev) => {
       const next = prev.map((c) => (c.id === id ? fn(c) : c));
@@ -82,6 +91,16 @@ export default function App() {
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    const current = activeConv ? activeConv.model : model;
+    if (modelPool.some((m) => m.id === current)) return;
+    const fallback = fileMode ? FILE_DEFAULT_MODEL : DEFAULT_MODEL;
+    setModel(fallback);
+    if (activeId) {
+      updateConv(activeId, (c) => ({ ...c, model: fallback }));
+    }
+  }, [fileMode, activeConv, activeId, model, modelPool, updateConv]);
 
   const handleSelect = useCallback(
     async (id: string) => {
@@ -349,11 +368,13 @@ export default function App() {
               error={error}
               onDismissError={() => setError(null)}
               disabled={streaming}
+              models={modelPool}
+              mode={fileMode ? "file" : "text"}
             />
           </>
         ) : (
           <>
-            <WelcomeScreen onPromptClick={handleSend} usage={usage} />
+            <WelcomeScreen onPromptClick={handleSend} usage={usage} fileMode={fileMode} />
             <ChatInput
               model={model}
               onModelChange={handleModelChange}
@@ -364,6 +385,8 @@ export default function App() {
               error={error}
               onDismissError={() => setError(null)}
               disabled={streaming}
+              models={modelPool}
+              mode={fileMode ? "file" : "text"}
             />
           </>
         )}

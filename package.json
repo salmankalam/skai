@@ -10,6 +10,7 @@
     "deploy": "wrangler deploy",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "models:check": "node scripts/check-models.mjs",
     "test:e2e": "node e2e/core-flows.mjs && node e2e/features.mjs",
     "test:e2e:core": "node e2e/core-flows.mjs",
     "test:e2e:features": "node e2e/features.mjs",

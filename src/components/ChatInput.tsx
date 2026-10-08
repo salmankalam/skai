@@ -2,9 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { ArrowUp, Paperclip, X, FileText, FileIcon, ImageIcon } from "lucide-react";
 import { ModelSelector } from "./ModelSelector";
 import { formatFileSize, MAX_FILE_SIZE } from "../lib/files";
-import { getModel, VISION_FALLBACK_MODEL, hasVision } from "../lib/models";
-import { DAILY_MESSAGE_LIMIT } from "../lib/limits";
-import type { FileAttachment } from "../lib/types";
+import { DAILY_MESSAGE_LIMIT, FILE_DAILY_LIMIT } from "../lib/limits";
+import type { FileAttachment, ModelOption } from "../lib/types";
 
 interface ChatInputProps {
   model: string;
@@ -16,6 +15,8 @@ interface ChatInputProps {
   error: string | null;
   onDismissError: () => void;
   disabled?: boolean;
+  models: ModelOption[];
+  mode: "text" | "file";
 }
 
 function AttachmentIcon({ kind }: { kind: FileAttachment["kind"] }) {
@@ -34,6 +35,8 @@ export function ChatInput({
   error,
   onDismissError,
   disabled,
+  models,
+  mode,
 }: ChatInputProps) {
   const [value, setValue] = useState("");
   const [dragOver, setDragOver] = useState(false);
@@ -67,9 +70,7 @@ export function ChatInput({
     onAddFiles(Array.from(files));
   };
 
-  const hasImage = attachments.some((a) => a.kind === "image");
   const hasPdf = attachments.some((a) => a.kind === "pdf");
-  const visionFallback = hasImage && !hasVision(model);
 
   return (
     <div className="border-t border-zinc-800 bg-zinc-950 p-3 sm:p-4">
@@ -125,7 +126,7 @@ export function ChatInput({
           )}
 
           <div className="flex flex-wrap items-end gap-2">
-            <ModelSelector value={model} onChange={onModelChange} />
+            <ModelSelector value={model} onChange={onModelChange} models={models} mode={mode} />
             <div className="relative">
               <button
                 onClick={() => fileInputRef.current?.click()}
@@ -184,17 +185,17 @@ export function ChatInput({
           </div>
         </div>
 
-        {(visionFallback || hasPdf) && (
+        {mode === "file" && (
           <p className="mt-2 text-center text-[11px] text-amber-500/80">
-            {visionFallback &&
-              `Image attached — ${getModel(VISION_FALLBACK_MODEL).name} (free) will answer this message. `}
+            File task — your files are answered by OpenRouter&apos;s free models ({FILE_DAILY_LIMIT}
+            /day). Pick one from the selector.{" "}
             {hasPdf && "PDFs are parsed with the free Cloudflare AI engine."}
           </p>
         )}
 
         <p className="mt-2 text-center text-[11px] text-zinc-600">
           SK-AI can make mistakes. Review responses carefully. · {DAILY_MESSAGE_LIMIT} free
-          messages/day
+          messages/day · {FILE_DAILY_LIMIT} file requests/day
         </p>
       </div>
     </div>

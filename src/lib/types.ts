@@ -23,10 +23,13 @@ export interface Conversation {
   updatedAt: number;
 }
 
+export type ProviderRoute = "nara" | "openrouter";
+
 export interface ModelOption {
   id: string;
   name: string;
   provider: string;
+  route: ProviderRoute;
   description: string;
   vision: boolean;
 }
