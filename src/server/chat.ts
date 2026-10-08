@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
-import { ALL_MODELS, isFreeModel } from "../lib/models";
+import { ALL_MODELS, NARA_FREE_MODELS, isFreeModel } from "../lib/models";
 import { MAX_TEXT_INJECT_CHARS, detectKind } from "../lib/files";
 import { DAILY_MESSAGE_LIMIT, FILE_DAILY_LIMIT, OPENROUTER_GLOBAL_LIMIT, GLOBAL_USER } from "../lib/limits";
 import { getUsage, getGlobalUsage, incrementUsage, setGlobalUsage } from "./provider-usage";
@@ -264,14 +264,15 @@ export const chat = createServerFn({ method: "POST" })
     history.push({ role: "user", content: userContent });
 
     // Only free tools: `cloudflare-ai` PDF engine is free (never mistral-ocr).
-    const body = JSON.stringify({
-      model: data.model,
-      stream: true,
-      messages: history,
-      ...(route === "openrouter" && hasPdf
-        ? { plugins: [{ id: "file-parser", pdf: { engine: "cloudflare-ai" } }] }
-        : {}),
-    });
+    const buildBody = (modelId: string) =>
+      JSON.stringify({
+        model: modelId,
+        stream: true,
+        messages: history,
+        ...(route === "openrouter" && hasPdf
+          ? { plugins: [{ id: "file-parser", pdf: { engine: "cloudflare-ai" } }] }
+          : {}),
+      });
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${apiKey}`,
@@ -279,27 +280,137 @@ export const chat = createServerFn({ method: "POST" })
     };
     if (route === "openrouter") headers["X-Title"] = "SK-AI";
 
-    const providerRes = await fetch(route === "nara" ? NARA_URL : OPENROUTER_URL, {
-      method: "POST",
-      headers,
-      body,
-    });
-
-    if (!providerRes.ok || !providerRes.body) {
-      const message = await providerErrorMessage(providerRes);
-      if (route === "openrouter" && (providerRes.status === 429 || providerRes.status === 402)) {
-        // Provider says we're out — stop ALL OpenRouter requests for today.
-        await setGlobalUsage("openrouter", OPENROUTER_GLOBAL_LIMIT);
-        throw new Error(
-          `OpenRouter's daily quota was reached (${providerRes.status}: ${message}) — file tasks are disabled until midnight UTC. Text chat via NaraRouter still works.`
-        );
+    const doFetch = async (modelId: string) => {
+      // Dead upstreams can hang before response headers — abort so retries proceed.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), FIRST_BYTE_DEADLINE_MS);
+      try {
+        return await fetch(route === "nara" ? NARA_URL : OPENROUTER_URL, {
+          method: "POST",
+          headers,
+          body: buildBody(modelId),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timer);
       }
+    };
+
+    // Free upstream pools fail often (immediate `event: error` frames or
+    // silent hangs). Read early frames before responding so a dead stream
+    // can be retried and only surfaces as a clean error if it stays dead.
+    const FIRST_BYTE_DEADLINE_MS = 15_000;
+
+    /** Tries one model up to `attempts` times; resolves a healthy Response or null. */
+    const tryModel = async (
+      modelId: string,
+      attempts: number,
+      failureOut: { message: string }
+    ): Promise<Response | null> => {
+      for (let attempt = 1; attempt <= attempts; attempt++) {
+        let res: Response;
+        try {
+          res = await doFetch(modelId);
+        } catch {
+          failureOut.message = "timed out waiting for a response";
+          continue;
+        }
+        if (!res.ok || !res.body) {
+          const message = await providerErrorMessage(res);
+          if (route === "openrouter" && (res.status === 429 || res.status === 402)) {
+            // Provider says we're out — stop ALL OpenRouter requests for today.
+            await setGlobalUsage("openrouter", OPENROUTER_GLOBAL_LIMIT);
+            throw new Error(
+              `OpenRouter's daily quota was reached (${res.status}: ${message}) — file tasks are disabled until midnight UTC. Text chat via NaraRouter still works.`
+            );
+          }
+          failureOut.message = message;
+          continue;
+        }
+
+        // Pull early chunks: proceed on real content, fail on upstream error frames.
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        const accEarly = createDeltaAccumulator();
+        let errorSnippet = "";
+        const deadline = setTimeout(() => reader.cancel().catch(() => {}), FIRST_BYTE_DEADLINE_MS);
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            accEarly.push(chunk);
+            if (!errorSnippet) {
+              const m = chunk.match(/"message"\s*:\s*"([^"]+)"/);
+              if (m && /event: error|"error"\s*:/.test(chunk)) errorSnippet = m[1].slice(0, 200);
+            }
+            if (accEarly.text()) break; // real content started — stream is healthy
+          }
+        } catch {
+          if (!errorSnippet) errorSnippet = "timed out waiting for a response";
+        } finally {
+          clearTimeout(deadline);
+        }
+
+        if (accEarly.text()) {
+          // Healthy: re-wrap the response so the already-read prefix replays first.
+          const acc = accEarly;
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                const replay = acc.text();
+                if (replay) {
+                  controller.enqueue(
+                    new TextEncoder().encode(
+                      `data: ${JSON.stringify({ choices: [{ delta: { content: replay } }] })}\n\n`
+                    )
+                  );
+                }
+              },
+              async pull(controller) {
+                const { done, value } = await reader.read();
+                if (done) {
+                  controller.close();
+                  return;
+                }
+                controller.enqueue(value);
+              },
+              cancel(reason) {
+                return reader.cancel(reason);
+              },
+            }),
+            { headers: { "Content-Type": "text/event-stream; charset=utf-8" } }
+          );
+        }
+        failureOut.message = errorSnippet || "upstream error or timeout";
+      }
+      return null;
+    };
+
+    // Free models flap constantly — if the chosen model stays dead after
+    // retries, fail over to sibling models on the same free tier (quota
+    // was consumed once for the user action, not per attempt).
+    const fallbacks =
+      route === "nara"
+        ? NARA_FREE_MODELS.map((m) => m.id).filter((id) => id !== data.model)
+        : [];
+    const modelsToTry = [data.model, ...fallbacks.slice(0, 3)];
+
+    let providerRes: Response | null = null;
+    const failure = { message: "" };
+    for (let i = 0; i < modelsToTry.length; i++) {
+      const attempts = i === 0 ? 2 : 1; // chosen model gets one retry; fallbacks one shot
+      providerRes = await tryModel(modelsToTry[i], attempts, failure);
+      if (providerRes) break;
+    }
+    if (!providerRes) {
+      const label = route === "nara" ? "NaraRouter" : "OpenRouter";
       throw new Error(
-        `${route === "nara" ? "NaraRouter" : "OpenRouter"} error (${providerRes.status}): ${message}`
+        `${label}: ${failure.message || "no response"} — all free ${label} models failed after retries. Try again in a moment.`
       );
     }
 
-    const upstream = providerRes.body;
+    const upstream = providerRes.body!;
     const { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
     const accumulator = createDeltaAccumulator();

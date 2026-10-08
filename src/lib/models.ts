@@ -3,10 +3,10 @@ import type { ModelOption, ProviderRoute } from "./types";
 /**
  * FREE models only — never add paid models anywhere.
  *
- * NaraRouter free-tier models for text chat. Aliases below are best-effort
- * slugs of the published free plan (Agnes 2.5 Flash, Agnes 3 Flash, Exo
- * Stealth, Jev, Laguna S 2.1). Verify the real ids with
- * `npm run models:check` once NARA_API_KEY is set (probes GET /v1/models).
+ * NaraRouter free-tier models for text chat. All ids verified against
+ * GET /v1/models and live streaming probes (`npm run models:probe`).
+ * Only input-priced-at-0 models are listed (agnes-2.5/3 are free-plan
+ * inclusions despite payg list prices).
  */
 export const NARA_FREE_MODELS: ModelOption[] = [
   {
@@ -15,31 +15,7 @@ export const NARA_FREE_MODELS: ModelOption[] = [
     provider: "NaraRouter",
     route: "nara",
     description: "Fast free model for everyday chat",
-    vision: false,
-  },
-  {
-    id: "agnes-3-flash",
-    name: "Agnes 3 Flash",
-    provider: "NaraRouter",
-    route: "nara",
-    description: "Newest Agnes — quick, free responses",
-    vision: false,
-  },
-  {
-    id: "exo-stealth",
-    name: "Exo Stealth",
-    provider: "NaraRouter",
-    route: "nara",
-    description: "Free NaraRouter model",
-    vision: false,
-  },
-  {
-    id: "jev",
-    name: "Jev",
-    provider: "NaraRouter",
-    route: "nara",
-    description: "Free NaraRouter model",
-    vision: false,
+    vision: true,
   },
   {
     id: "laguna-s-2.1",
@@ -48,6 +24,38 @@ export const NARA_FREE_MODELS: ModelOption[] = [
     route: "nara",
     description: "Free NaraRouter model",
     vision: false,
+  },
+  {
+    id: "ling-3.0-flash-sante-free",
+    name: "Ling 3.0 Flash Sante",
+    provider: "NaraRouter",
+    route: "nara",
+    description: "Free Ling flash model",
+    vision: false,
+  },
+  {
+    id: "nemotron-3-super-free",
+    name: "Nemotron 3 Super Free",
+    provider: "NaraRouter",
+    route: "nara",
+    description: "Free Nemotron — multimodal reasoning",
+    vision: true,
+  },
+  {
+    id: "nemotron-3-ultra-free",
+    name: "Nemotron 3 Ultra Free",
+    provider: "NaraRouter",
+    route: "nara",
+    description: "Free Nemotron — multimodal reasoning",
+    vision: true,
+  },
+  {
+    id: "nemotron-3.5-lightning-free",
+    name: "Nemotron 3.5 Lightning",
+    provider: "NaraRouter",
+    route: "nara",
+    description: "Free Nemotron — fast multimodal",
+    vision: true,
   },
 ];
 
@@ -82,14 +90,6 @@ export const OPENROUTER_FILE_MODELS: ModelOption[] = [
     vision: true,
   },
   {
-    id: "thinkingmachines/inkling:free",
-    name: "Inkling",
-    provider: "OpenRouter",
-    route: "openrouter",
-    description: "Vision + audio input. 1M context",
-    vision: true,
-  },
-  {
     id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
     name: "Nemotron 3 Nano Omni",
     provider: "OpenRouter",
@@ -105,7 +105,7 @@ export const TEXT_MODELS = NARA_FREE_MODELS;
 export const FILE_MODELS = OPENROUTER_FILE_MODELS;
 
 export const DEFAULT_MODEL = NARA_FREE_MODELS[0].id;
-export const FILE_DEFAULT_MODEL = "google/gemma-4-31b-it:free";
+export const FILE_DEFAULT_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free";
 
 export function isFreeModel(id: string): boolean {
   return ALL_MODELS.some((m) => m.id === id);

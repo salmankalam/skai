@@ -204,12 +204,16 @@ export default function App() {
               if (!payload || payload === "[DONE]") continue;
               try {
                 const json = JSON.parse(payload);
+                if (json?.error?.message) {
+                  throw new Error(String(json.error.message));
+                }
                 const delta = json?.choices?.[0]?.delta?.content;
                 if (typeof delta === "string") {
                   acc += delta;
                   setStreamText(acc);
                 }
-              } catch {
+              } catch (err) {
+                if (err instanceof Error && err.message && !(err instanceof SyntaxError)) throw err;
                 // ignore keep-alive frames
               }
             }

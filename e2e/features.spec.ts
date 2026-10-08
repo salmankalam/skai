@@ -204,7 +204,7 @@ test("features", async ({ page }) => {
     await innerTextContains(page, "FILE TASK — MODELS THAT SUPPORT FILES", 5000);
     const fmMenu = await bodyText(page);
     expect(fmMenu).toContain("Gemma 4 31B");
-    expect(fmMenu).toContain("Inkling");
+    expect(fmMenu).toContain("Nemotron 3 Nano Omni");
     expect(fmMenu).toContain("OpenRouter");
     expect(fmMenu).not.toContain("Agnes 2.5 Flash");
     await shot(page, "feat-7-file-models.png");

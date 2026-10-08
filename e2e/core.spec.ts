@@ -39,7 +39,14 @@ test("core flows", async ({ page }) => {
     await innerTextContains(page, "SELECT MODEL", 5000);
     await sleep(200);
     const menuText = await bodyText(page);
-    const freeNames = ["Agnes 2.5 Flash", "Agnes 3 Flash", "Exo Stealth", "Jev", "Laguna S 2.1"];
+    const freeNames = [
+      "Agnes 2.5 Flash",
+      "Laguna S 2.1",
+      "Ling 3.0 Flash Sante",
+      "Nemotron 3 Super Free",
+      "Nemotron 3 Ultra Free",
+      "Nemotron 3.5 Lightning",
+    ];
     expect(freeNames.filter((n) => !menuText.includes(n))).toEqual([]);
     expect(menuText).not.toMatch(/GPT-4|Claude|MiniMax M3|Qwen3\.8/);
     await shot(page, "core-1-models.png");
@@ -61,10 +68,9 @@ test("core flows", async ({ page }) => {
     await page.waitForFunction(
       () =>
         document.querySelector('[data-role="assistant"]') ||
-        /OPENROUTER_API_KEY is not set|File-task limit|daily quota|OpenRouter error|Only free models/i.test(
-          document.body.innerText
-        ),
-      { timeout: 30000 }
+        document.querySelector('[data-testid="chat-error"]'),
+      undefined,
+      { timeout: 90000 }
     );
     expect(await bodyText(page)).toContain("Hello from core e2e");
     await shot(page, "core-3-error.png");

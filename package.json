@@ -16,7 +16,8 @@
     "test:e2e:features": "playwright test e2e/features.spec.ts",
     "db:migrate": "wrangler d1 migrations apply sk-ai-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply sk-ai-db --remote",
-    "typegen": "wrangler types"
+    "typegen": "wrangler types",
+    "models:probe": "node scripts/probe-nara.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.0.0",
