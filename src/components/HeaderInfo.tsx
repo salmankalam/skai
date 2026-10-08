@@ -25,9 +25,11 @@ function InfoTip({ label, children }: InfoTipProps) {
       >
         {label}
       </button>
+      {/* invisible bridge over the gap so the pointer can travel into the panel */}
+      {open && <div aria-hidden="true" className="absolute left-0 right-0 top-full h-1" />}
       <div
         role="tooltip"
-        className={`absolute left-1/2 top-full z-50 mt-3 w-112 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3.5 text-left shadow-xl shadow-black/40 transition-all ease-out ${
+        className={`absolute left-1/2 top-full z-50 mt-1 w-128 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3.5 text-left shadow-xl shadow-black/40 transition-all ease-out ${
           open
             ? "translate-y-0 scale-100 opacity-100 delay-0 duration-200"
             : "pointer-events-none translate-y-1 scale-95 opacity-0 delay-150 duration-150"
@@ -89,13 +91,23 @@ export function HeaderInfo() {
         <p className={TITLE}>Features</p>
         <ul className={`${BODY} space-y-2.5`}>
           <li>
-            <span className="font-medium text-zinc-300">Free text chat:</span> talk to
-            NaraRouter&apos;s free models — 25 messages per day, streamed responses.
+            <span className="font-medium text-zinc-300">Free text chat:</span> pick any free model —
+            NaraRouter&apos;s (25 messages per day) or OpenRouter&apos;s (5 requests/day, shared
+            with file tasks). Responses stream live with markdown formatting.
           </li>
           <li>
             <span className="font-medium text-zinc-300">File Q&amp;A:</span> ask about images, PDFs,
-            and text/code files (up to 5 MB) — answered by OpenRouter&apos;s free multimodal models,
-            5 file requests per day.
+            and text/code files (up to 5 MB) — answered by OpenRouter&apos;s free multimodal models
+            within the same 5 requests/day.
+          </li>
+          <li>
+            <span className="font-medium text-zinc-300">Smart failover:</span> free models go down
+            often — SK-AI retries and automatically switches to another free model, and tells you
+            which one answered (shown under every reply).
+          </li>
+          <li>
+            <span className="font-medium text-zinc-300">Notifications:</span> quota updates, model
+            switches, and limit alerts appear as a brief toast and are saved under the bell icon.
           </li>
           <li>
             <span className="font-medium text-zinc-300">History &amp; search:</span> conversations

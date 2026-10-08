@@ -17,7 +17,6 @@ interface ChatInputProps {
   disabled?: boolean;
   models: ModelOption[];
   mode: "text" | "file";
-  globalFileRemaining: number | null;
 }
 
 function AttachmentIcon({ kind }: { kind: FileAttachment["kind"] }) {
@@ -38,7 +37,6 @@ export function ChatInput({
   disabled,
   models,
   mode,
-  globalFileRemaining,
 }: ChatInputProps) {
   const [value, setValue] = useState("");
   const [dragOver, setDragOver] = useState(false);
@@ -199,15 +197,20 @@ export function ChatInput({
           <p className="mt-2 text-center text-[11px] text-amber-500/80">
             File task — your files are answered by OpenRouter&apos;s free models ({FILE_DAILY_LIMIT}
             /day). Pick one from the selector.
-            {globalFileRemaining !== null &&
-              ` · ${globalFileRemaining} of 50 shared free requests left app-wide`}
             {hasPdf && " PDFs are parsed with the free Cloudflare AI engine."}
           </p>
         )}
+        {mode === "text" &&
+          models.find((m) => m.id === model)?.route === "openrouter" && (
+            <p className="mt-2 text-center text-[11px] text-amber-500/80">
+              Text via OpenRouter — counts toward your {FILE_DAILY_LIMIT} OpenRouter requests/day
+              (shared with file tasks).
+            </p>
+          )}
 
         <p className="mt-2 text-center text-[11px] text-zinc-600">
           SK-AI can make mistakes. Review responses carefully. · {DAILY_MESSAGE_LIMIT} free
-          messages/day · {FILE_DAILY_LIMIT} file requests/day
+          messages/day · {FILE_DAILY_LIMIT} OpenRouter requests/day
         </p>
       </div>
     </div>

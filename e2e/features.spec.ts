@@ -188,7 +188,7 @@ test("features", async ({ page }) => {
     await page.waitForSelector('textarea[placeholder*="Message SK-AI"]', { timeout: 15000 });
 
     await attachFile();
-    await innerTextContains(page, "file requests left today", 15000);
+    await innerTextContains(page, "OpenRouter requests left today", 15000);
     const fm = await bodyText(page);
     expect(fm).toContain("5 of 5");
     expect(fm).toContain("File task");
@@ -219,12 +219,12 @@ test("features", async ({ page }) => {
     await page.reload({ waitUntil: "networkidle" });
     await page.waitForSelector('textarea[placeholder*="Message SK-AI"]', { timeout: 15000 });
     await attachFile();
-    await innerTextContains(page, "File limit reached", 15000);
+    await innerTextContains(page, "OpenRouter request limit reached", 15000);
     await shot(page, "feat-8-file-limit-badge.png");
 
     await page.type('textarea[placeholder*="Message SK-AI"]', "should be file-blocked");
     await page.keyboard.press("Enter");
-    await innerTextContains(page, "File-task limit reached", 20000);
+    await innerTextContains(page, "OpenRouter request limit reached", 20000);
     await shot(page, "feat-9-file-limit-error.png");
   });
 
@@ -239,19 +239,23 @@ test("features", async ({ page }) => {
 
     await page.type('textarea[placeholder*="Message SK-AI"]', "global block test");
     await page.keyboard.press("Enter");
-    await innerTextContains(page, "OpenRouter's daily quota", 20000);
+    await innerTextContains(page, "OpenRouter's free requests are being used", 20000);
     const gq = await bodyText(page);
     expect(gq).toContain("Text chat via NaraRouter still works");
+    expect(gq).not.toContain("50");
     await shot(page, "feat-10-global-quota.png");
   });
 
   await test.step("Nara text path unaffected by OpenRouter block", async () => {
-    // nara usage is at 25 from the earlier seed → nara limit error, proving the nara path
+    // fresh page → default model is NaraRouter; nara usage is at 25 from the
+    // earlier seed → nara limit error, proving the nara path still works
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForSelector('textarea[placeholder*="Message SK-AI"]', { timeout: 15000 });
     await page.type('textarea[placeholder*="Message SK-AI"]', "text while openrouter blocked");
     await page.keyboard.press("Enter");
     await innerTextContains(page, "messages per day per user", 20000);
     const errBanner = await page.textContent('[data-testid="chat-error"]');
-    expect(errBanner).not.toContain("OpenRouter's daily quota");
+    expect(errBanner).not.toContain("OpenRouter's free requests");
     await shot(page, "feat-11-text-still-works.png");
   });
 
@@ -263,9 +267,10 @@ test("features", async ({ page }) => {
     await page.click('[data-testid="notif-bell"]');
     await page.waitForSelector('[data-testid="notif-panel"]', { timeout: 5000 });
     const panel = await page.textContent('[data-testid="notif-panel"]');
-    expect(panel).toContain("OpenRouter's daily quota was used up");
-    expect(panel).toContain("File-task limit reached");
+    expect(panel).toContain("OpenRouter's free requests are being used");
+    expect(panel).toContain("OpenRouter request limit reached");
     expect(panel).toContain("messages per day per user");
+    expect(panel).not.toContain("50");
     await page.waitForSelector('[data-testid="notif-badge"]', { state: "detached", timeout: 5000 });
     await shot(page, "feat-12-notifications.png");
   });

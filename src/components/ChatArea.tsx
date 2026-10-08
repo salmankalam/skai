@@ -98,7 +98,10 @@ function MessageBubble({ message }: { message: Message }) {
             </div>
           )}
         </div>
-        <p className="mt-1 text-[10px] text-zinc-600">{formatTime(message.timestamp)}</p>
+        <p className="mt-1 text-[10px] text-zinc-600">
+          {formatTime(message.timestamp)}
+          {message.model && ` · ${message.model}`}
+        </p>
       </div>
     </div>
   );

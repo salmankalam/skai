@@ -12,6 +12,8 @@ export interface Message {
   content: string;
   timestamp: number;
   attachments?: FileAttachment[];
+  /** Display name of the model that generated an assistant reply. */
+  model?: string;
 }
 
 export interface Conversation {

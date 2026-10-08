@@ -19,8 +19,8 @@ export function WelcomeScreen({ onPromptClick, usage, fileMode }: WelcomeScreenP
   if (usage?.fileExhausted) {
     usageText = (
       <span className="text-amber-500">
-        OpenRouter quota reached — free requests used up by all users; file tasks disabled until
-        midnight UTC
+        OpenRouter quota reached — free requests used up by other users; unavailable until midnight
+        UTC
       </span>
     );
   } else if (fileMode) {
@@ -35,11 +35,11 @@ export function WelcomeScreen({ onPromptClick, usage, fileMode }: WelcomeScreenP
         <span className="font-medium text-zinc-300">
           {usage.file.remaining} of {usage.file.limit}
         </span>{" "}
-        file requests left today
+        OpenRouter requests left today
       </>
     ) : (
       <span className="text-amber-500">
-        File limit reached ({usage.file.limit}/day) — resets at midnight UTC
+        OpenRouter request limit reached ({usage.file.limit}/day) — resets at midnight UTC
       </span>
     );
   }

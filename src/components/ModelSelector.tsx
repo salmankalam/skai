@@ -9,6 +9,34 @@ interface ModelSelectorProps {
   mode: "text" | "file";
 }
 
+function ModelRow({
+  model,
+  value,
+  onPick,
+}: {
+  model: ModelOption;
+  value: string;
+  onPick: (id: string) => void;
+}) {
+  return (
+    <button
+      onClick={() => onPick(model.id)}
+      className="flex w-full items-start gap-2.5 px-3 py-2 text-left transition-colors hover:bg-zinc-800"
+    >
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-zinc-200">{model.name}</span>
+          <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">
+            {model.provider}
+          </span>
+        </div>
+        <p className="mt-0.5 text-xs text-zinc-500">{model.description}</p>
+      </div>
+      {value === model.id && <Check className="mt-0.5 h-4 w-4 shrink-0 text-violet-400" />}
+    </button>
+  );
+}
+
 export function ModelSelector({ value, onChange, models, mode }: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -24,6 +52,14 @@ export function ModelSelector({ value, onChange, models, mode }: ModelSelectorPr
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  const pick = (id: string) => {
+    onChange(id);
+    setOpen(false);
+  };
+
+  const naraModels = models.filter((m) => m.route === "nara");
+  const openRouterModels = models.filter((m) => m.route === "openrouter");
 
   return (
     <div ref={ref} className="relative">
@@ -42,27 +78,43 @@ export function ModelSelector({ value, onChange, models, mode }: ModelSelectorPr
           <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
             {mode === "file" ? "File task — models that support files" : "Select Model"}
           </p>
-          {models.map((model) => (
-            <button
-              key={model.id}
-              onClick={() => {
-                onChange(model.id);
-                setOpen(false);
-              }}
-              className="flex w-full items-start gap-2.5 px-3 py-2 text-left transition-colors hover:bg-zinc-800"
-            >
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-zinc-200">{model.name}</span>
-                  <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">
-                    {model.provider}
-                  </span>
+
+          {mode === "file" ? (
+            <div className="max-h-80 overflow-y-auto">
+              {openRouterModels.map((model) => (
+                <ModelRow key={model.id} model={model} value={value} onPick={pick} />
+              ))}
+            </div>
+          ) : (
+            <>
+              {naraModels.length > 0 && (
+                <div>
+                  <p className="border-t border-zinc-800 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+                    NaraRouter — text chat
+                  </p>
+                  {/* ~3 rows visible; scroll for the rest */}
+                  <div className="max-h-[10.25rem] overflow-y-auto">
+                    {naraModels.map((model) => (
+                      <ModelRow key={model.id} model={model} value={value} onPick={pick} />
+                    ))}
+                  </div>
                 </div>
-                <p className="mt-0.5 text-xs text-zinc-500">{model.description}</p>
-              </div>
-              {value === model.id && <Check className="mt-0.5 h-4 w-4 text-violet-400" />}
-            </button>
-          ))}
+              )}
+              {openRouterModels.length > 0 && (
+                <div>
+                  <p className="border-t border-zinc-800 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+                    OpenRouter — 5 requests/day
+                  </p>
+                  {/* ~3 rows visible; scroll for the rest */}
+                  <div className="max-h-[10.25rem] overflow-y-auto">
+                    {openRouterModels.map((model) => (
+                      <ModelRow key={model.id} model={model} value={value} onPick={pick} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>

@@ -18,6 +18,7 @@ interface MessageRow {
   content: string;
   attachments: string | null;
   timestamp: number;
+  model: string | null;
 }
 
 function toConversation(row: ConversationRow, messages: Message[]): Conversation {
@@ -38,6 +39,7 @@ function toMessage(row: MessageRow): Message {
     content: row.content,
     timestamp: row.timestamp,
     attachments: row.attachments ? JSON.parse(row.attachments) : undefined,
+    model: row.model ?? undefined,
   };
 }
 

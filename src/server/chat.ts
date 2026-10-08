@@ -149,13 +149,13 @@ export const chat = createServerFn({ method: "POST" })
     } else {
       const globalUsed = await getGlobalUsage("openrouter");
       if (globalUsed >= OPENROUTER_GLOBAL_LIMIT) {
-        const msg = `OpenRouter's daily quota was used up by everyone using this app (${OPENROUTER_GLOBAL_LIMIT} requests/day) — file tasks are unavailable until midnight UTC. Text chat via NaraRouter still works.`;
+        const msg = `OpenRouter's free requests are being used by other users right now — unavailable until midnight UTC. Text chat via NaraRouter still works.`;
         await saveNotification(data.userId, "global", msg);
         throw new Error(msg);
       }
       const used = await getUsage(data.userId, "openrouter");
       if (used >= FILE_DAILY_LIMIT) {
-        const msg = `File-task limit reached — ${FILE_DAILY_LIMIT} file requests per day per user. Your quota resets at midnight UTC. Text chat is still available.`;
+        const msg = `OpenRouter request limit reached — ${FILE_DAILY_LIMIT} requests per day per user (text and files). Your quota resets at midnight UTC. Text chat via NaraRouter still works.`;
         await saveNotification(data.userId, "limit", msg);
         throw new Error(msg);
       }
@@ -171,15 +171,12 @@ export const chat = createServerFn({ method: "POST" })
     const pendingNotifs: AppNotification[] = [];
     if (route === "openrouter") {
       await incrementUsage(GLOBAL_USER, "openrouter");
-      const [userAfter, globalAfter] = await Promise.all([
-        getUsage(data.userId, "openrouter"),
-        getGlobalUsage("openrouter"),
-      ]);
+      const userAfter = await getUsage(data.userId, "openrouter");
       pendingNotifs.push(
         await saveNotification(
           data.userId,
           "info",
-          `File request recorded — ${Math.max(0, FILE_DAILY_LIMIT - userAfter)} of ${FILE_DAILY_LIMIT} left today · ${Math.max(0, OPENROUTER_GLOBAL_LIMIT - globalAfter)} of ${OPENROUTER_GLOBAL_LIMIT} shared free requests left app-wide.`
+          `OpenRouter request recorded — ${Math.max(0, FILE_DAILY_LIMIT - userAfter)} of ${FILE_DAILY_LIMIT} left today.`
         )
       );
     }
@@ -335,7 +332,7 @@ export const chat = createServerFn({ method: "POST" })
           if (route === "openrouter" && (res.status === 429 || res.status === 402)) {
             // Provider says we're out — stop ALL OpenRouter requests for today.
             await setGlobalUsage("openrouter", OPENROUTER_GLOBAL_LIMIT);
-            const msg = `OpenRouter's free requests are being used by other users right now (${res.status}) — file tasks are unavailable until midnight UTC. Text chat via NaraRouter still works.`;
+            const msg = `OpenRouter's free requests are being used by other users right now — unavailable until midnight UTC. Text chat via NaraRouter still works.`;
             await saveNotification(data.userId, "global", msg);
             throw new Error(msg);
           }
@@ -425,15 +422,16 @@ export const chat = createServerFn({ method: "POST" })
 
     const accumulator = createDeltaAccumulator();
     const assistantId = crypto.randomUUID();
+    let servedModelName = nameOf(data.model);
 
     const persistAssistant = async () => {
       const text = accumulator.text();
       if (!text) return;
       await env.DB.batch([
         env.DB.prepare(
-          `INSERT INTO messages (id, conversation_id, role, content, attachments, timestamp)
-           VALUES (?, ?, 'assistant', ?, NULL, ?)`
-        ).bind(assistantId, data.conversationId, text, Date.now()),
+          `INSERT INTO messages (id, conversation_id, role, content, attachments, timestamp, model)
+           VALUES (?, ?, 'assistant', ?, NULL, ?, ?)`
+        ).bind(assistantId, data.conversationId, text, Date.now(), servedModelName),
         env.DB.prepare(
           `UPDATE conversations SET updated_at = ? WHERE id = ? AND user_id = ?`
         ).bind(Date.now(), data.conversationId, data.userId),
@@ -461,6 +459,7 @@ export const chat = createServerFn({ method: "POST" })
           );
           if (providerRes) {
             servedByIndex = i;
+            servedModelName = nameOf(modelsToTry[i]);
             break;
           }
           const next = modelsToTry[i + 1];
@@ -483,6 +482,7 @@ export const chat = createServerFn({ method: "POST" })
             ),
           });
         }
+        await emit({ served: servedModelName });
 
         const reader = providerRes.body!.getReader();
         const decoder = new TextDecoder();

@@ -39,6 +39,12 @@ test("live providers: Nara text + OpenRouter file reply", async ({ page }) => {
   console.log(`smoke nara reply: ${text.reply.slice(0, 120)}`);
   expect(text.reply.length).toBeGreaterThan(0);
 
+  const meta = await page.evaluate(() => {
+    const row = document.querySelector('[data-role="assistant"]');
+    return [...(row?.querySelectorAll("p") ?? [])].map((p) => p.textContent ?? "").join(" | ");
+  });
+  expect(meta).toMatch(/· .+/); // "09:12 PM · <model name>" under the bubble
+
   const sample = `${process.env.TEMP ?? "/tmp"}/skai-smoke-file.txt`;
   fs.writeFileSync(sample, "smoke: the secret word is BANANA_SPLIT");
   await page.setInputFiles('input[type="file"]', sample);

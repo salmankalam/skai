@@ -7,9 +7,9 @@ import { ChatInput } from "./components/ChatInput";
 import { WelcomeScreen } from "./components/WelcomeScreen";
 import { HeaderInfo } from "./components/HeaderInfo";
 import {
+  ALL_MODELS,
   DEFAULT_MODEL,
   FILE_DEFAULT_MODEL,
-  NARA_FREE_MODELS,
   OPENROUTER_FILE_MODELS,
 } from "./lib/models";
 import { MAX_FILE_SIZE, detectKind } from "./lib/files";
@@ -130,9 +130,10 @@ export default function App() {
 
   const activeConv = conversations.find((c) => c.id === activeId) ?? null;
 
-  // Files → OpenRouter's free file-capable models; pure text → NaraRouter's free models.
+  // Files → OpenRouter's free file-capable models; text → any free model
+  // (NaraRouter or OpenRouter, both share the same per-user quotas).
   const fileMode = attachments.length > 0;
-  const modelPool = fileMode ? OPENROUTER_FILE_MODELS : NARA_FREE_MODELS;
+  const modelPool = fileMode ? OPENROUTER_FILE_MODELS : ALL_MODELS;
 
   const remaining = usage ? usage.text.remaining : DAILY_MESSAGE_LIMIT;
   const exhausted = usage !== null && remaining === 0;
@@ -245,6 +246,7 @@ export default function App() {
         const decoder = new TextDecoder();
         let buffer = "";
         let acc = "";
+        let servedModel: string | null = null;
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -271,6 +273,10 @@ export default function App() {
                   pushToast(n);
                   continue;
                 }
+                if (typeof json?.served === "string") {
+                  servedModel = json.served;
+                  continue;
+                }
                 const delta = json?.choices?.[0]?.delta?.content;
                 if (typeof delta === "string") {
                   if (!acc) setStreamStatus(null);
@@ -291,6 +297,7 @@ export default function App() {
             role: "assistant",
             content: acc,
             timestamp: Date.now(),
+            model: servedModel ?? undefined,
           };
           updateConv(convId, (c) => ({
             ...c,
@@ -549,7 +556,6 @@ export default function App() {
               disabled={streaming}
               models={modelPool}
               mode={fileMode ? "file" : "text"}
-              globalFileRemaining={usage ? usage.fileGlobal.remaining : null}
             />
           </>
         ) : (
@@ -567,7 +573,6 @@ export default function App() {
               disabled={streaming}
               models={modelPool}
               mode={fileMode ? "file" : "text"}
-              globalFileRemaining={usage ? usage.fileGlobal.remaining : null}
             />
           </>
         )}
