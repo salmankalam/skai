@@ -305,9 +305,11 @@ export const chat = createServerFn({ method: "POST" })
     const tryModel = async (
       modelId: string,
       attempts: number,
-      failureOut: { message: string }
+      failureOut: { message: string },
+      onRetry?: () => void
     ): Promise<Response | null> => {
       for (let attempt = 1; attempt <= attempts; attempt++) {
+        if (attempt > 1) onRetry?.();
         let res: Response;
         try {
           res = await doFetch(modelId);
@@ -395,24 +397,19 @@ export const chat = createServerFn({ method: "POST" })
         ? NARA_FREE_MODELS.map((m) => m.id).filter((id) => id !== data.model)
         : [];
     const modelsToTry = [data.model, ...fallbacks.slice(0, 3)];
+    const nameOf = (id: string) => ALL_MODELS.find((m) => m.id === id)?.name ?? id;
 
-    let providerRes: Response | null = null;
-    const failure = { message: "" };
-    for (let i = 0; i < modelsToTry.length; i++) {
-      const attempts = i === 0 ? 2 : 1; // chosen model gets one retry; fallbacks one shot
-      providerRes = await tryModel(modelsToTry[i], attempts, failure);
-      if (providerRes) break;
-    }
-    if (!providerRes) {
-      const label = route === "nara" ? "NaraRouter" : "OpenRouter";
-      throw new Error(
-        `${label}: ${failure.message || "no response"} — all free ${label} models failed after retries. Try again in a moment.`
-      );
-    }
-
-    const upstream = providerRes.body!;
     const { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
+    const encoder = new TextEncoder();
+    const emit = async (obj: unknown) => {
+      try {
+        await writer.write(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+      } catch {
+        // client went away
+      }
+    };
+
     const accumulator = createDeltaAccumulator();
     const assistantId = crypto.randomUUID();
 
@@ -430,28 +427,68 @@ export const chat = createServerFn({ method: "POST" })
       ]);
     };
 
+    // Failover runs inside the stream so the client sees accurate live
+    // status ("Connecting to X…", "X is slow — retrying…") while it happens.
     (async () => {
-      const reader = upstream.getReader();
-      const decoder = new TextDecoder();
       try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          accumulator.push(chunk);
-          await writer.write(value);
+        let providerRes: Response | null = null;
+        const failure = { message: "" };
+        for (let i = 0; i < modelsToTry.length; i++) {
+          const attempts = i === 0 ? 2 : 1; // chosen model gets one retry; fallbacks one shot
+          await emit({
+            status:
+              i === 0
+                ? `Connecting to ${nameOf(modelsToTry[i])}…`
+                : `Trying ${nameOf(modelsToTry[i])}…`,
+          });
+          providerRes = await tryModel(modelsToTry[i], attempts, failure, () =>
+            emit({ status: `${nameOf(modelsToTry[i])} is slow — retrying…` })
+          );
+          if (providerRes) break;
+          const next = modelsToTry[i + 1];
+          if (next) {
+            await emit({ status: `${nameOf(modelsToTry[i])} isn't responding — trying ${nameOf(next)}…` });
+          }
         }
-        await persistAssistant();
-        await writer.close();
-      } catch (err) {
-        // Client disconnected or stream broke — keep whatever was generated.
+        if (!providerRes) {
+          const label = route === "nara" ? "NaraRouter" : "OpenRouter";
+          throw new Error(
+            `${label}: ${failure.message || "no response"} — all free ${label} models failed after retries. Try again in a moment.`
+          );
+        }
+
+        const reader = providerRes.body!.getReader();
+        const decoder = new TextDecoder();
         try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            accumulator.push(chunk);
+            await writer.write(value);
+          }
           await persistAssistant();
-        } catch {
-          // best effort
+          await writer.close();
+        } catch (err) {
+          // Client disconnected or stream broke — keep whatever was generated.
+          try {
+            await persistAssistant();
+          } catch {
+            // best effort
+          }
+          try {
+            await writer.abort(err);
+          } catch {
+            // already closed
+          }
         }
+      } catch (err) {
+        // Failover exhausted or kill-switch tripped — clean error frame.
+        await emit({
+          error: { message: err instanceof Error ? err.message : String(err) },
+        });
         try {
-          await writer.abort(err);
+          await writer.close();
         } catch {
           // already closed
         }

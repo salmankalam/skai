@@ -47,6 +47,7 @@ export default function App() {
   const [model, setModel] = useState<string>(DEFAULT_MODEL);
   const [streaming, setStreaming] = useState(false);
   const [streamText, setStreamText] = useState("");
+  const [streamStatus, setStreamStatus] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [usage, setUsage] = useState<DailyUsage | null>(null);
@@ -170,6 +171,7 @@ export default function App() {
 
       setStreaming(true);
       setStreamText("");
+      setStreamStatus("Connecting…");
       try {
         const res = (await chat({
           data: {
@@ -207,8 +209,13 @@ export default function App() {
                 if (json?.error?.message) {
                   throw new Error(String(json.error.message));
                 }
+                if (typeof json?.status === "string") {
+                  setStreamStatus(json.status);
+                  continue;
+                }
                 const delta = json?.choices?.[0]?.delta?.content;
                 if (typeof delta === "string") {
+                  if (!acc) setStreamStatus(null);
                   acc += delta;
                   setStreamText(acc);
                 }
@@ -238,6 +245,7 @@ export default function App() {
       } finally {
         setStreaming(false);
         setStreamText("");
+        setStreamStatus(null);
         if (userId) refreshUsage(userId);
       }
     },
@@ -392,6 +400,7 @@ export default function App() {
               messages={activeConv.messages}
               streaming={streaming}
               streamText={streamText}
+              streamStatus={streamStatus}
             />
             <ChatInput
               model={activeConv.model}
