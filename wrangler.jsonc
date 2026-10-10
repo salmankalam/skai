@@ -11,8 +11,7 @@
     {
       "binding": "DB",
       "database_name": "sk-ai-db",
-      // Replace with the id from `wrangler d1 create sk-ai-db` before deploying
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "b66b3570-5021-4c01-89ab-3a8d7d4ed8dd",
       "migrations_dir": "migrations"
     }
   ]
