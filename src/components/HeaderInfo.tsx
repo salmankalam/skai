@@ -72,7 +72,7 @@ export function HeaderInfo() {
           </li>
           <li>
             <span className="font-medium text-zinc-300">Data we store:</span> conversations,
-            uploaded files, and daily usage counters (Cloudflare D1/R2). Deleting a conversation
+            uploaded files, and daily usage counters (Cloudflare D1). Deleting a conversation
             permanently removes its messages and files.
           </li>
           <li>

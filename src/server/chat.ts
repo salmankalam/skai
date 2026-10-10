@@ -1,10 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
-import { ALL_MODELS, NARA_FREE_MODELS, isFreeModel } from "../lib/models";
+import { ALL_MODELS, NARA_FREE_MODELS, OPENROUTER_FILE_MODELS, isFreeModel } from "../lib/models";
 import { MAX_TEXT_INJECT_CHARS, detectKind } from "../lib/files";
 import { DAILY_MESSAGE_LIMIT, FILE_DAILY_LIMIT, OPENROUTER_GLOBAL_LIMIT, GLOBAL_USER } from "../lib/limits";
 import { getUsage, getGlobalUsage, incrementUsage, setGlobalUsage } from "./provider-usage";
 import { saveNotification } from "./notifications-db";
+import { base64ToBytes } from "./files";
 import type { AppNotification, FileAttachment } from "../lib/types";
 
 const NARA_URL = "https://router.bynara.id/v1/chat/completions";
@@ -41,7 +42,7 @@ interface FileRow {
   id: string;
   filename: string;
   content_type: string;
-  r2_key: string;
+  data: string | null;
   kind: FileAttachment["kind"];
 }
 
@@ -49,34 +50,23 @@ async function loadFileRows(userId: string, ids: string[]): Promise<FileRow[]> {
   if (ids.length === 0) return [];
   const placeholders = ids.map(() => "?").join(", ");
   const res = await env.DB.prepare(
-    `SELECT id, filename, content_type, r2_key FROM files
+    `SELECT id, filename, content_type, data FROM files
      WHERE user_id = ? AND id IN (${placeholders})`
   )
     .bind(userId, ...ids)
-    .all<{ id: string; filename: string; content_type: string; r2_key: string }>();
+    .all<{ id: string; filename: string; content_type: string; data: string | null }>();
   return res.results.map((row) => ({
     ...row,
     kind: detectKind(row.filename, row.content_type) ?? "text",
   }));
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  }
-  return btoa(binary);
-}
-
 /** Plain-text file contents, injected as prompt context (free). */
-async function loadTextContext(files: FileRow[]): Promise<string> {
+function loadTextContext(files: FileRow[]): string {
   const parts: string[] = [];
   for (const f of files) {
-    if (f.kind !== "text") continue;
-    const obj = await env.FILES.get(f.r2_key);
-    if (!obj) continue;
-    let text = await obj.text();
+    if (f.kind !== "text" || !f.data) continue;
+    let text = new TextDecoder().decode(base64ToBytes(f.data));
     if (text.length > MAX_TEXT_INJECT_CHARS) {
       text = text.slice(0, MAX_TEXT_INJECT_CHARS) + "\n\n[...truncated...]";
     }
@@ -197,22 +187,19 @@ export const chat = createServerFn({ method: "POST" })
     const hasPdf = fileRows.some((f) => f.kind === "pdf");
 
     // Build the user turn: [text-file contexts] [prompt] [images] [pdfs]
-    const textContext = await loadTextContext(fileRows);
+    const textContext = loadTextContext(fileRows);
     const mediaParts: ContentPart[] = [];
     for (const f of fileRows) {
-      const obj = await env.FILES.get(f.r2_key);
-      if (!obj) continue;
+      if (!f.data) continue;
       if (f.kind === "image") {
-        const b64 = bytesToBase64(new Uint8Array(await obj.arrayBuffer()));
         mediaParts.push({
           type: "image_url",
-          image_url: { url: `data:${f.content_type};base64,${b64}` },
+          image_url: { url: `data:${f.content_type};base64,${f.data}` },
         });
       } else if (f.kind === "pdf") {
-        const b64 = bytesToBase64(new Uint8Array(await obj.arrayBuffer()));
         mediaParts.push({
           type: "file",
-          file: { filename: f.filename, file_data: `data:application/pdf;base64,${b64}` },
+          file: { filename: f.filename, file_data: `data:application/pdf;base64,${f.data}` },
         });
       }
     }
@@ -402,10 +389,9 @@ export const chat = createServerFn({ method: "POST" })
     // Free models flap constantly — if the chosen model stays dead after
     // retries, fail over to sibling models on the same free tier (quota
     // was consumed once for the user action, not per attempt).
-    const fallbacks =
-      route === "nara"
-        ? NARA_FREE_MODELS.map((m) => m.id).filter((id) => id !== data.model)
-        : [];
+    const siblings =
+      route === "nara" ? NARA_FREE_MODELS : OPENROUTER_FILE_MODELS;
+    const fallbacks = siblings.map((m) => m.id).filter((id) => id !== data.model);
     const modelsToTry = [data.model, ...fallbacks.slice(0, 3)];
     const nameOf = (id: string) => ALL_MODELS.find((m) => m.id === id)?.name ?? id;
 

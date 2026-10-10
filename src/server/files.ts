@@ -8,7 +8,7 @@ function base64ByteLength(b64: string): number {
   return Math.floor((b64.length * 3) / 4) - padding;
 }
 
-function base64ToBytes(b64: string): Uint8Array {
+export function base64ToBytes(b64: string): Uint8Array {
   const binary = atob(b64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -39,18 +39,13 @@ export const uploadFile = createServerFn({ method: "POST" })
     }
 
     const id = crypto.randomUUID();
-    const r2Key = `users/${data.userId}/${id}/${data.filename}`;
     const contentType = data.contentType || "application/octet-stream";
 
-    await env.FILES.put(r2Key, base64ToBytes(data.dataBase64), {
-      httpMetadata: { contentType },
-    });
-
     await env.DB.prepare(
-      `INSERT INTO files (id, user_id, conversation_id, filename, content_type, size, r2_key, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO files (id, user_id, conversation_id, filename, content_type, size, r2_key, created_at, data)
+       VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)`
     )
-      .bind(id, data.userId, data.conversationId, data.filename, contentType, size, r2Key, Date.now())
+      .bind(id, data.userId, data.conversationId, data.filename, contentType, size, Date.now(), data.dataBase64)
       .run();
 
     return { id, filename: data.filename, contentType, size, kind };
@@ -60,13 +55,12 @@ export const deleteFile = createServerFn({ method: "POST" })
   .validator((data: { userId: string; fileId: string }) => data)
   .handler(async ({ data }) => {
     const row = await env.DB.prepare(
-      `SELECT r2_key FROM files WHERE id = ? AND user_id = ?`
+      `SELECT id FROM files WHERE id = ? AND user_id = ?`
     )
       .bind(data.fileId, data.userId)
-      .first<{ r2_key: string }>();
+      .first();
     if (!row) return { ok: false as const };
 
-    await env.FILES.delete(row.r2_key);
     await env.DB.prepare(`DELETE FROM files WHERE id = ? AND user_id = ?`)
       .bind(data.fileId, data.userId)
       .run();

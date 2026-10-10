@@ -54,7 +54,7 @@ test("core flows", async ({ page }) => {
     await sleep(300);
   });
 
-  await test.step("file chip appears after attach (R2 upload)", async () => {
+  await test.step("file chip appears after attach (D1 upload)", async () => {
     const sample = `${process.env.TEMP ?? "/tmp"}/skai-sample-note.txt`;
     fs.writeFileSync(sample, "Hello from the e2e file attachment test.\nSecond line.");
     await page.setInputFiles('input[type="file"]', sample);

@@ -105,14 +105,6 @@ export const deleteConversation = createServerFn({ method: "POST" })
       .first();
     if (!conv) return { ok: false as const };
 
-    const files = await env.DB.prepare(
-      `SELECT r2_key FROM files WHERE conversation_id = ? AND user_id = ?`
-    )
-      .bind(data.conversationId, data.userId)
-      .all<{ r2_key: string }>();
-
-    await Promise.all(files.results.map((f) => env.FILES.delete(f.r2_key)));
-
     await env.DB.batch([
       env.DB.prepare(`DELETE FROM messages WHERE conversation_id = ?`).bind(data.conversationId),
       env.DB.prepare(`DELETE FROM files WHERE conversation_id = ? AND user_id = ?`).bind(
