@@ -61,7 +61,7 @@ test("features", async ({ page }) => {
     await page.hover('button[aria-label="Privacy Policy"]');
     await sleep(400);
     const priv = await bodyText(page);
-    expect(priv).toContain("NaraRouter and OpenRouter");
+    expect(priv).toContain("APInex and OpenRouter");
     expect(priv).toContain("never sold");
 
     await page.hover('button[aria-label="Features"]');
@@ -106,9 +106,22 @@ test("features", async ({ page }) => {
     expect(tipOpacityOut).toBe("0");
   });
 
+  await test.step("minute limit (5/min) blocks burst sends (server-enforced)", async () => {
+    const thisMinute = Math.floor(Date.now() / 60000);
+    sql(
+      `INSERT INTO rate_windows (user_id, provider, window_start, count) VALUES ('${USER}','apinex',${thisMinute},5) ON CONFLICT(user_id, provider, window_start) DO UPDATE SET count = 5;`
+    );
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForSelector('textarea[placeholder*="Message SK-AI"]', { timeout: 15000 });
+    await page.type('textarea[placeholder*="Message SK-AI"]', "burst should be blocked");
+    await page.keyboard.press("Enter");
+    await innerTextContains(page, "requests per minute", 20000);
+    await shot(page, "feat-1c-minute-limit.png");
+  });
+
   await test.step("send blocked at 25/day limit (server-enforced)", async () => {
     sql(
-      `INSERT INTO provider_usage (user_id, provider, day, count) VALUES ('${USER}','nara','${TODAY}',25) ON CONFLICT(user_id, provider, day) DO UPDATE SET count = 25;`
+      `INSERT INTO provider_usage (user_id, provider, day, count) VALUES ('${USER}','apinex','${TODAY}',25) ON CONFLICT(user_id, provider, day) DO UPDATE SET count = 25;`
     );
     await page.reload({ waitUntil: "networkidle" });
     await innerTextContains(page, "0 of 25 messages left today", 15000);
@@ -156,7 +169,7 @@ test("features", async ({ page }) => {
 
     await page.evaluate(() => {
       const b = [...document.querySelectorAll("button")].find(
-        (x) => /Agnes|Exo|Jev|Laguna/.test(x.textContent) && x.closest(".relative")
+        (x) => /Qwen|Deepseek|GPT 6|GLM|Mimo/.test(x.textContent) && x.closest(".relative")
       );
       b?.click();
     });
@@ -206,7 +219,7 @@ test("features", async ({ page }) => {
     expect(fmMenu).toContain("Gemma 4 31B");
     expect(fmMenu).toContain("Nemotron 3 Nano Omni");
     expect(fmMenu).toContain("OpenRouter");
-    expect(fmMenu).not.toContain("Agnes 2.5 Flash");
+    expect(fmMenu).not.toContain("Qwen 3.8 MAX");
     await shot(page, "feat-7-file-models.png");
     await page.mouse.click(700, 100);
     await sleep(300);
@@ -241,14 +254,14 @@ test("features", async ({ page }) => {
     await page.keyboard.press("Enter");
     await innerTextContains(page, "OpenRouter's free requests are being used", 20000);
     const gq = await bodyText(page);
-    expect(gq).toContain("Text chat via NaraRouter still works");
+    expect(gq).toContain("Text chat via APInex still works");
     expect(gq).not.toContain("50");
     await shot(page, "feat-10-global-quota.png");
   });
 
-  await test.step("Nara text path unaffected by OpenRouter block", async () => {
-    // fresh page → default model is NaraRouter; nara usage is at 25 from the
-    // earlier seed → nara limit error, proving the nara path still works
+  await test.step("APInex text path unaffected by OpenRouter block", async () => {
+    // fresh page → default model is APInex; apinex usage is at 25 from the
+    // earlier seed → apinex limit error, proving the apinex path still works
     await page.reload({ waitUntil: "networkidle" });
     await page.waitForSelector('textarea[placeholder*="Message SK-AI"]', { timeout: 15000 });
     await page.type('textarea[placeholder*="Message SK-AI"]', "text while openrouter blocked");
@@ -270,6 +283,7 @@ test("features", async ({ page }) => {
     expect(panel).toContain("OpenRouter's free requests are being used");
     expect(panel).toContain("OpenRouter request limit reached");
     expect(panel).toContain("messages per day per user");
+    expect(panel).toContain("requests per minute");
     expect(panel).not.toContain("50");
     await page.waitForSelector('[data-testid="notif-badge"]', { state: "detached", timeout: 5000 });
     await shot(page, "feat-12-notifications.png");

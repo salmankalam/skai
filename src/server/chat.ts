@@ -1,14 +1,22 @@
 import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
-import { ALL_MODELS, NARA_FREE_MODELS, OPENROUTER_FILE_MODELS, isFreeModel } from "../lib/models";
+import { ALL_MODELS, APINEX_FREE_MODELS, OPENROUTER_FILE_MODELS, isFreeModel } from "../lib/models";
 import { MAX_TEXT_INJECT_CHARS, detectKind } from "../lib/files";
-import { DAILY_MESSAGE_LIMIT, FILE_DAILY_LIMIT, OPENROUTER_GLOBAL_LIMIT, GLOBAL_USER } from "../lib/limits";
-import { getUsage, getGlobalUsage, incrementUsage, setGlobalUsage } from "./provider-usage";
+import {
+  DAILY_MESSAGE_LIMIT,
+  APINEX_MINUTE_LIMIT,
+  APINEX_GLOBAL_RPM,
+  FILE_DAILY_LIMIT,
+  OPENROUTER_GLOBAL_LIMIT,
+  GLOBAL_USER,
+} from "../lib/limits";
+import { getUsage, getGlobalUsage, incrementUsage, setGlobalUsage, checkAndConsumeMinute } from "./provider-usage";
 import { saveNotification } from "./notifications-db";
 import { base64ToBytes } from "./files";
 import type { AppNotification, FileAttachment } from "../lib/types";
 
-const NARA_URL = "https://router.bynara.id/v1/chat/completions";
+// const NARA_URL = "https://router.bynara.id/v1/chat/completions"; // nara disabled 2026-10-10
+const APINEX_URL = "https://api.apinex.bond/v1/chat/completions";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 /** Extracts a readable message from either provider's error envelope. */
@@ -124,28 +132,39 @@ export const chat = createServerFn({ method: "POST" })
       );
     }
 
-    if (route === "nara") {
-      const used = await getUsage(data.userId, "nara");
+    if (route === "apinex") {
+      const used = await getUsage(data.userId, "apinex");
       if (used >= DAILY_MESSAGE_LIMIT) {
-        const msg = `Daily limit reached — ${DAILY_MESSAGE_LIMIT} messages per day per user. Your quota resets at midnight UTC.`;
+        const msg = `APInex daily limit reached — ${DAILY_MESSAGE_LIMIT} messages per day per user. Your quota resets at midnight UTC.`;
         await saveNotification(data.userId, "limit", msg);
         throw new Error(msg);
       }
-      if (!env.NARA_API_KEY) {
+      if (!(await checkAndConsumeMinute(data.userId, "apinex", APINEX_MINUTE_LIMIT))) {
+        const msg = `Easy there — APInex allows ${APINEX_MINUTE_LIMIT} requests per minute. Try again in a few seconds.`;
+        await saveNotification(data.userId, "limit", msg);
+        throw new Error(msg);
+      }
+      if (!(await checkAndConsumeMinute(GLOBAL_USER, "apinex", APINEX_GLOBAL_RPM))) {
+        // Our shared key's free tier is 5 rpm total — busy signal, never a number.
+        const msg = `APInex is busy right now — try again in a few seconds.`;
+        await saveNotification(data.userId, "global", msg);
+        throw new Error(msg);
+      }
+      if (!env.APINEX_API_KEY) {
         throw new Error(
-          "NARA_API_KEY is not set. Add it to .dev.vars for local dev, or run `wrangler secret put NARA_API_KEY` for production."
+          "APINEX_API_KEY is not set. Add it to .dev.vars for local dev, or run `wrangler secret put APINEX_API_KEY` for production."
         );
       }
     } else {
       const globalUsed = await getGlobalUsage("openrouter");
       if (globalUsed >= OPENROUTER_GLOBAL_LIMIT) {
-        const msg = `OpenRouter's free requests are being used by other users right now — unavailable until midnight UTC. Text chat via NaraRouter still works.`;
+        const msg = `OpenRouter's free requests are being used by other users right now — unavailable until midnight UTC. Text chat via APInex still works.`;
         await saveNotification(data.userId, "global", msg);
         throw new Error(msg);
       }
       const used = await getUsage(data.userId, "openrouter");
       if (used >= FILE_DAILY_LIMIT) {
-        const msg = `OpenRouter request limit reached — ${FILE_DAILY_LIMIT} requests per day per user (text and files). Your quota resets at midnight UTC. Text chat via NaraRouter still works.`;
+        const msg = `OpenRouter request limit reached — ${FILE_DAILY_LIMIT} requests per day per user (text and files). Your quota resets at midnight UTC. Text chat via APInex still works.`;
         await saveNotification(data.userId, "limit", msg);
         throw new Error(msg);
       }
@@ -171,7 +190,7 @@ export const chat = createServerFn({ method: "POST" })
       );
     }
 
-    const apiKey = route === "nara" ? env.NARA_API_KEY : env.OPENROUTER_API_KEY;
+    const apiKey = route === "apinex" ? env.APINEX_API_KEY : env.OPENROUTER_API_KEY;
 
     const fileRows = await loadFileRows(data.userId, data.attachmentIds);
     const attachments = fileRows.map(
@@ -282,7 +301,7 @@ export const chat = createServerFn({ method: "POST" })
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), FIRST_BYTE_DEADLINE_MS);
       try {
-        return await fetch(route === "nara" ? NARA_URL : OPENROUTER_URL, {
+        return await fetch(route === "apinex" ? APINEX_URL : OPENROUTER_URL, {
           method: "POST",
           headers,
           body: buildBody(modelId),
@@ -316,10 +335,16 @@ export const chat = createServerFn({ method: "POST" })
         }
         if (!res.ok || !res.body) {
           const message = await providerErrorMessage(res);
+          if (route === "apinex" && res.status === 429) {
+            // rpm is account-wide on the shared key — siblings would 429 too.
+            const msg = `APInex is busy right now — try again in a few seconds.`;
+            await saveNotification(data.userId, "global", msg);
+            throw new Error(msg);
+          }
           if (route === "openrouter" && (res.status === 429 || res.status === 402)) {
             // Provider says we're out — stop ALL OpenRouter requests for today.
             await setGlobalUsage("openrouter", OPENROUTER_GLOBAL_LIMIT);
-            const msg = `OpenRouter's free requests are being used by other users right now — unavailable until midnight UTC. Text chat via NaraRouter still works.`;
+            const msg = `OpenRouter's free requests are being used by other users right now — unavailable until midnight UTC. Text chat via APInex still works.`;
             await saveNotification(data.userId, "global", msg);
             throw new Error(msg);
           }
@@ -390,7 +415,7 @@ export const chat = createServerFn({ method: "POST" })
     // retries, fail over to sibling models on the same free tier (quota
     // was consumed once for the user action, not per attempt).
     const siblings =
-      route === "nara" ? NARA_FREE_MODELS : OPENROUTER_FILE_MODELS;
+      route === "apinex" ? APINEX_FREE_MODELS : OPENROUTER_FILE_MODELS;
     const fallbacks = siblings.map((m) => m.id).filter((id) => id !== data.model);
     const modelsToTry = [data.model, ...fallbacks.slice(0, 3)];
     const nameOf = (id: string) => ALL_MODELS.find((m) => m.id === id)?.name ?? id;
@@ -454,7 +479,7 @@ export const chat = createServerFn({ method: "POST" })
           }
         }
         if (!providerRes) {
-          const label = route === "nara" ? "NaraRouter" : "OpenRouter";
+          const label = route === "apinex" ? "APInex" : "OpenRouter";
           throw new Error(
             `${label}: ${failure.message || "no response"} — all free ${label} models failed after retries. Try again in a moment.`
           );

@@ -131,7 +131,7 @@ export default function App() {
   const activeConv = conversations.find((c) => c.id === activeId) ?? null;
 
   // Files → OpenRouter's free file-capable models; text → any free model
-  // (NaraRouter or OpenRouter, both share the same per-user quotas).
+  // (APInex or OpenRouter, each with its own per-user quotas).
   const fileMode = attachments.length > 0;
   const modelPool = fileMode ? OPENROUTER_FILE_MODELS : ALL_MODELS;
 

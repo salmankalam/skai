@@ -11,7 +11,7 @@ export const getDailyUsage = createServerFn({ method: "POST" })
   .validator((data: { userId: string }) => data)
   .handler(async ({ data }): Promise<DailyUsage> => {
     const [textUsed, fileUsed, globalUsed] = await Promise.all([
-      getUsage(data.userId, "nara"),
+      getUsage(data.userId, "apinex"),
       getUsage(data.userId, "openrouter"),
       getGlobalUsage("openrouter"),
     ]);

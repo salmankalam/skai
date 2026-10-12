@@ -5,6 +5,7 @@ interface __BaseEnv_Env {
 	FILES: R2Bucket;
 	DB: D1Database;
 	NARA_API_KEY: string;
+	APINEX_API_KEY: string;
 	OPENROUTER_API_KEY: string;
 }
 declare namespace Cloudflare {
@@ -15,7 +16,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "NARA_API_KEY" | "OPENROUTER_API_KEY">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "NARA_API_KEY" | "APINEX_API_KEY" | "OPENROUTER_API_KEY">> {}
 }
 declare module "*.txt" {
 	const value: string;

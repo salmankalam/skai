@@ -58,7 +58,7 @@ export function ModelSelector({ value, onChange, models, mode }: ModelSelectorPr
     setOpen(false);
   };
 
-  const naraModels = models.filter((m) => m.route === "nara");
+  const apinexModels = models.filter((m) => m.route === "apinex");
   const openRouterModels = models.filter((m) => m.route === "openrouter");
 
   return (
@@ -87,14 +87,14 @@ export function ModelSelector({ value, onChange, models, mode }: ModelSelectorPr
             </div>
           ) : (
             <>
-              {naraModels.length > 0 && (
+              {apinexModels.length > 0 && (
                 <div>
                   <p className="border-t border-zinc-800 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
-                    NaraRouter — text chat
+                    APInex — 25 msgs/day, 5/min
                   </p>
                   {/* ~3 rows visible; scroll for the rest */}
                   <div className="max-h-[10.25rem] overflow-y-auto">
-                    {naraModels.map((model) => (
+                    {apinexModels.map((model) => (
                       <ModelRow key={model.id} model={model} value={value} onPick={pick} />
                     ))}
                   </div>

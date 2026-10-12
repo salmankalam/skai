@@ -1,5 +1,14 @@
-/** NaraRouter text chat — per user, per UTC day. */
+/** APInex text chat — per user, per UTC day. */
 export const DAILY_MESSAGE_LIMIT = 25;
+
+/** APInex text chat — per user, per minute (matches their free-tier rpm). */
+export const APINEX_MINUTE_LIMIT = 5;
+
+/**
+ * Our single API key's real throughput on the free tier is 5 rpm shared by
+ * all users — internal guard only, never surfaced (busy error instead).
+ */
+export const APINEX_GLOBAL_RPM = 5;
 
 /** OpenRouter file-based tasks — per user, per UTC day. */
 export const FILE_DAILY_LIMIT = 5;

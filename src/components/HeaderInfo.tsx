@@ -77,7 +77,7 @@ export function HeaderInfo() {
           </li>
           <li>
             <span className="font-medium text-zinc-300">Data processing:</span> your messages and
-            attached files are transmitted to NaraRouter and OpenRouter solely to generate AI
+            attached files are transmitted to APInex and OpenRouter solely to generate AI
             responses; their respective privacy policies govern that processing.
           </li>
           <li>
@@ -92,8 +92,8 @@ export function HeaderInfo() {
         <ul className={`${BODY} space-y-2.5`}>
           <li>
             <span className="font-medium text-zinc-300">Free text chat:</span> pick any free model —
-            NaraRouter&apos;s (25 messages per day) or OpenRouter&apos;s (5 requests/day, shared
-            with file tasks). Responses stream live with markdown formatting.
+            APInex&apos;s (25 messages per day, up to 5 per minute) or OpenRouter&apos;s (5
+            requests/day, shared with file tasks). Responses stream live with markdown formatting.
           </li>
           <li>
             <span className="font-medium text-zinc-300">File Q&amp;A:</span> ask about images, PDFs,

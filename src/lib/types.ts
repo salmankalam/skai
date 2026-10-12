@@ -25,7 +25,8 @@ export interface Conversation {
   updatedAt: number;
 }
 
-export type ProviderRoute = "nara" | "openrouter";
+// "nara" commented out for now — re-enable by adding it back to the union.
+export type ProviderRoute = "apinex" | "openrouter";
 
 export interface AppNotification {
   id: string;

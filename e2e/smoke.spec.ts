@@ -23,20 +23,20 @@ async function waitForReply(page: import("@playwright/test").Page, minBubbles = 
   });
 }
 
-test("live providers: Nara text + OpenRouter file reply", async ({ page }) => {
+test("live providers: APInex text + OpenRouter file reply", async ({ page }) => {
   test.setTimeout(300_000);
   clearUser(USER);
   sql(`DELETE FROM provider_usage WHERE user_id='__global__';`);
 
   await openApp(page, USER);
-  await page.type('textarea[placeholder*="Message SK-AI"]', "Reply with exactly: NARA_OK");
+  await page.type('textarea[placeholder*="Message SK-AI"]', "Reply with exactly: APINEX_OK");
   await page.keyboard.press("Enter");
   const text = await waitForReply(page);
   if (text.error) {
-    console.log(`smoke nara skip: ${text.error}`);
-    test.skip(true, `NaraRouter upstream degraded: ${text.error}`);
+    console.log(`smoke apinex skip: ${text.error}`);
+    test.skip(true, `APInex upstream degraded: ${text.error}`);
   }
-  console.log(`smoke nara reply: ${text.reply.slice(0, 120)}`);
+  console.log(`smoke apinex reply: ${text.reply.slice(0, 120)}`);
   expect(text.reply.length).toBeGreaterThan(0);
 
   const meta = await page.evaluate(() => {

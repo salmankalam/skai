@@ -18,12 +18,12 @@ test("core flows", async ({ page }) => {
     expect(body).toContain("No conversations yet");
   });
 
-  await test.step("default model = Agnes 2.5 Flash (NaraRouter)", async () => {
+  await test.step("default model = Qwen 3.8 MAX (APInex)", async () => {
     const modelBtn = await page.evaluate(() => {
-      const b = [...document.querySelectorAll("button")].find((x) => x.textContent.includes("Agnes"));
+      const b = [...document.querySelectorAll("button")].find((x) => x.textContent.includes("Qwen"));
       return b ? b.textContent.trim() : null;
     });
-    expect(modelBtn).toBe("NaraRouter/Agnes 2.5 Flash");
+    expect(modelBtn).toBe("APInex/Qwen 3.8 MAX");
   });
 
   await test.step("usage badge visible", async () => {
@@ -31,24 +31,26 @@ test("core flows", async ({ page }) => {
     expect(await bodyText(page)).toContain("25 of 25");
   });
 
-  await test.step("dropdown lists free NaraRouter models only", async () => {
+  await test.step("dropdown lists free APInex models only (NaraRouter hidden)", async () => {
     await page.evaluate(() => {
-      const b = [...document.querySelectorAll("button")].find((x) => x.textContent.includes("Agnes"));
+      const b = [...document.querySelectorAll("button")].find((x) => x.textContent.includes("Qwen"));
       b.click();
     });
     await innerTextContains(page, "SELECT MODEL", 5000);
     await sleep(200);
     const menuText = await bodyText(page);
     const freeNames = [
-      "Agnes 2.5 Flash",
-      "Laguna S 2.1",
-      "Ling 3.0 Flash Sante",
-      "Nemotron 3 Super Free",
-      "Nemotron 3 Ultra Free",
-      "Nemotron 3.5 Lightning",
+      "Qwen 3.8 MAX",
+      "Deepseek V4.1 Flash",
+      "Deepseek V4 Flash",
+      "Deepseek V4 Pro",
+      "GPT 6 Luna",
+      "GLM-5.3 Flash",
+      "Mimo V2.6 Pro",
     ];
     expect(freeNames.filter((n) => !menuText.includes(n))).toEqual([]);
-    expect(menuText).not.toMatch(/GPT-4|Claude|MiniMax M3|Qwen3\.8/);
+    expect(menuText).not.toContain("NaraRouter");
+    expect(menuText).not.toMatch(/Claude|MiniMax M3|Kimi/);
     await shot(page, "core-1-models.png");
     await page.mouse.click(700, 100);
     await sleep(300);
