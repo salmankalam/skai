@@ -27,7 +27,7 @@ import {
   listNotifications,
   markAllNotificationsRead,
 } from "./server/notifications";
-import { DAILY_MESSAGE_LIMIT, type DailyUsage } from "./lib/limits";
+import { DAILY_MESSAGE_LIMIT, FILE_DAILY_LIMIT, type DailyUsage } from "./lib/limits";
 import type { AppNotification, Conversation, FileAttachment, Message } from "./lib/types";
 
 const OPENROUTER_SELECTION_NOTICE = `Text via OpenRouter — counts toward your ${FILE_DAILY_LIMIT} OpenRouter requests/day (shared with file tasks).`;
