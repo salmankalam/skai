@@ -599,7 +599,7 @@ export default function App() {
         )}
       </main>
 
-      <div className="pointer-events-none fixed bottom-[calc(7.5rem+env(safe-area-inset-bottom))] left-1/2 z-[60] flex w-80 max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col gap-2 sm:bottom-24">
+      <div className="pointer-events-none fixed bottom-[calc(12.5rem+env(safe-area-inset-bottom))] left-1/2 z-[60] flex w-80 max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col gap-2 sm:bottom-24">
         {toasts.map((t) => (
           <div
             key={t.id}
