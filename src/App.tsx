@@ -22,9 +22,15 @@ import {
 import { uploadFile, deleteFile } from "./server/files";
 import { chat } from "./server/chat";
 import { getDailyUsage } from "./server/usage";
-import { listNotifications, markAllNotificationsRead } from "./server/notifications";
+import {
+  createNotification,
+  listNotifications,
+  markAllNotificationsRead,
+} from "./server/notifications";
 import { DAILY_MESSAGE_LIMIT, type DailyUsage } from "./lib/limits";
 import type { AppNotification, Conversation, FileAttachment, Message } from "./lib/types";
+
+const OPENROUTER_SELECTION_NOTICE = `Text via OpenRouter — counts toward your ${FILE_DAILY_LIMIT} OpenRouter requests/day (shared with file tasks).`;
 
 async function fileToBase64(file: File): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -65,14 +71,14 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  const pushToast = useCallback((n: AppNotification) => {
+  const pushToast = useCallback((n: AppNotification, durationMs = 8000) => {
     if (toastedIdsRef.current.has(n.id)) return;
     toastedIdsRef.current.add(n.id);
     const toastId = n.id;
     setToasts((prev) => [...prev.slice(-2), { id: toastId, message: n.message }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== toastId));
-    }, 8000);
+    }, durationMs);
   }, []);
 
   const refreshNotifications = useCallback(
@@ -344,8 +350,32 @@ export default function App() {
       if (activeId) {
         updateConv(activeId, (c) => ({ ...c, model: nextModel }));
       }
+      const next = ALL_MODELS.find((m) => m.id === nextModel);
+      if (next?.route === "openrouter" && userId) {
+        pushToast(
+          {
+            id: crypto.randomUUID(),
+            kind: "info",
+            message: OPENROUTER_SELECTION_NOTICE,
+            createdAt: Date.now(),
+            read: false,
+          },
+          10000
+        );
+        setTimeout(() => {
+          createNotification({
+            data: {
+              userId,
+              kind: "info",
+              message: OPENROUTER_SELECTION_NOTICE,
+            },
+          })
+            .then((n) => setNotifications((prev) => [n, ...prev]))
+            .catch(() => {});
+        }, 10000);
+      }
     },
-    [activeId, updateConv]
+    [activeId, pushToast, updateConv, userId]
   );
 
   const handleAddFiles = useCallback(

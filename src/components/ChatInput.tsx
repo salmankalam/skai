@@ -200,14 +200,6 @@ export function ChatInput({
             {hasPdf && " PDFs are parsed with the free Cloudflare AI engine."}
           </p>
         )}
-        {mode === "text" &&
-          models.find((m) => m.id === model)?.route === "openrouter" && (
-            <p className="mt-2 text-center text-[11px] text-amber-500/80">
-              Text via OpenRouter — counts toward your {FILE_DAILY_LIMIT} OpenRouter requests/day
-              (shared with file tasks).
-            </p>
-          )}
-
         <p className="mt-2 text-center text-[11px] text-zinc-600">
           SK-AI can make mistakes. Review responses carefully. · {DAILY_MESSAGE_LIMIT} free
           messages/day · {FILE_DAILY_LIMIT} OpenRouter requests/day

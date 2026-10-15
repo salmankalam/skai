@@ -8,6 +8,12 @@ body {
   @apply bg-zinc-950 text-zinc-100 antialiased;
 }
 
+@media (max-width: 767px) {
+  html {
+    font-size: 16.5px;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 6px;
 }
