@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { MessageSquare, Plus, Search, Trash2, Sparkles } from "lucide-react";
 import type { Conversation } from "../lib/types";
+import { MobileHeaderInfo } from "./HeaderInfo";
 
 interface SidebarProps {
   open: boolean;
@@ -78,7 +79,7 @@ export function Sidebar({ open, conversations, activeId, onSelect, onNew, onDele
                     e.stopPropagation();
                     onDelete(conv.id);
                   }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-zinc-600 opacity-0 transition-opacity hover:text-red-400 group-hover:opacity-100"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-zinc-600 opacity-100 transition-opacity hover:text-red-400 lg:opacity-0 lg:group-hover:opacity-100"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -86,6 +87,10 @@ export function Sidebar({ open, conversations, activeId, onSelect, onNew, onDele
             ))}
           </ul>
         )}
+      </div>
+
+      <div className="border-t border-zinc-800 pt-3">
+        <MobileHeaderInfo />
       </div>
 
       <div className="border-t border-zinc-800 px-4 py-3">

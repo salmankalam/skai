@@ -122,3 +122,91 @@ export function HeaderInfo() {
     </>
   );
 }
+
+function MobileInfoDisclosure({ label, children }: InfoTipProps) {
+  return (
+    <details className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+      <summary className="cursor-pointer list-none text-sm font-medium text-zinc-200">{label}</summary>
+      <div className="pt-2 text-[13px] leading-relaxed text-zinc-400">{children}</div>
+    </details>
+  );
+}
+
+export function MobileHeaderInfo() {
+  return (
+    <div className="md:hidden">
+      <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+        Information
+      </p>
+      <div className="space-y-2 px-3 pb-3">
+        <MobileInfoDisclosure label="Legal">
+          <p>SK-AI is provided &quot;as is&quot; without warranties of any kind, express or implied.</p>
+          <p className="mt-2.5">
+            To the fullest extent permitted by law, the application shall not be held liable for any
+            data breach, unauthorized access, data loss, or other security incident arising from or
+            related to your use of this service.
+          </p>
+          <p className="mt-2.5">
+            You remain solely responsible for any information you submit through this application.
+          </p>
+        </MobileInfoDisclosure>
+
+        <MobileInfoDisclosure label="Privacy Policy">
+          <ul className="space-y-2.5">
+            <li>
+              <span className="font-medium text-zinc-300">Anonymous usage:</span> no account or
+              personal details are collected; a random identifier stored in your browser links you to
+              your data.
+            </li>
+            <li>
+              <span className="font-medium text-zinc-300">Data we store:</span> conversations,
+              uploaded files, and daily usage counters (Cloudflare D1). Deleting a conversation
+              permanently removes its messages and files.
+            </li>
+            <li>
+              <span className="font-medium text-zinc-300">Data processing:</span> your messages and
+              attached files are transmitted to APInex and OpenRouter solely to generate AI
+              responses; their respective privacy policies govern that processing.
+            </li>
+            <li>
+              <span className="font-medium text-zinc-300">No selling:</span> your data is never sold,
+              rented, or shared with third parties beyond the model providers named above.
+            </li>
+          </ul>
+        </MobileInfoDisclosure>
+
+        <MobileInfoDisclosure label="Features">
+          <ul className="space-y-2.5">
+            <li>
+              <span className="font-medium text-zinc-300">Free text chat:</span> pick any free model —
+              APInex&apos;s (25 messages per day, up to 5 per minute) or OpenRouter&apos;s (5
+              requests/day, shared with file tasks). Responses stream live with markdown formatting.
+            </li>
+            <li>
+              <span className="font-medium text-zinc-300">File Q&amp;A:</span> ask about images, PDFs,
+              and text/code files (up to 5 MB) — answered by OpenRouter&apos;s free multimodal models
+              within the same 5 requests/day.
+            </li>
+            <li>
+              <span className="font-medium text-zinc-300">Smart failover:</span> free models go down
+              often — SK-AI retries and automatically switches to another free model, and tells you
+              which one answered (shown under every reply).
+            </li>
+            <li>
+              <span className="font-medium text-zinc-300">Notifications:</span> quota updates, model
+              switches, and limit alerts appear as a brief toast and are saved under the bell icon.
+            </li>
+            <li>
+              <span className="font-medium text-zinc-300">History &amp; search:</span> conversations
+              are saved automatically and fully searchable from the sidebar.
+            </li>
+            <li>
+              <span className="font-medium text-zinc-300">Everywhere:</span> responsive layout with a
+              mobile sidebar — no sign-up required.
+            </li>
+          </ul>
+        </MobileInfoDisclosure>
+      </div>
+    </div>
+  );
+}

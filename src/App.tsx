@@ -23,8 +23,10 @@ import { uploadFile, deleteFile } from "./server/files";
 import { chat } from "./server/chat";
 import { getDailyUsage } from "./server/usage";
 import { listNotifications, markAllNotificationsRead } from "./server/notifications";
-import { DAILY_MESSAGE_LIMIT, type DailyUsage } from "./lib/limits";
+import { DAILY_MESSAGE_LIMIT, FILE_DAILY_LIMIT, type DailyUsage } from "./lib/limits";
 import type { AppNotification, Conversation, FileAttachment, Message } from "./lib/types";
+
+const OPENROUTER_SELECTION_NOTICE = `Text via OpenRouter — counts toward your ${FILE_DAILY_LIMIT} OpenRouter requests/day (shared with file tasks).`;
 
 async function fileToBase64(file: File): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -65,14 +67,14 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  const pushToast = useCallback((n: AppNotification) => {
+  const pushToast = useCallback((n: AppNotification, durationMs = 8000) => {
     if (toastedIdsRef.current.has(n.id)) return;
     toastedIdsRef.current.add(n.id);
     const toastId = n.id;
     setToasts((prev) => [...prev.slice(-2), { id: toastId, message: n.message }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== toastId));
-    }, 8000);
+    }, durationMs);
   }, []);
 
   const refreshNotifications = useCallback(
@@ -344,8 +346,25 @@ export default function App() {
       if (activeId) {
         updateConv(activeId, (c) => ({ ...c, model: nextModel }));
       }
+      const next = ALL_MODELS.find((m) => m.id === nextModel);
+      if (next?.route === "openrouter" && userId) {
+        const notice: AppNotification = {
+          id: crypto.randomUUID(),
+          kind: "info",
+          message: OPENROUTER_SELECTION_NOTICE,
+          createdAt: Date.now(),
+          read: false,
+        };
+        pushToast(
+          notice,
+          10000
+        );
+        setTimeout(() => {
+          setNotifications((prev) => [notice, ...prev]);
+        }, 10000);
+      }
     },
-    [activeId, updateConv]
+    [activeId, pushToast, updateConv, userId]
   );
 
   const handleAddFiles = useCallback(
@@ -411,7 +430,7 @@ export default function App() {
       )}
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-zinc-800 px-4 py-2.5">
+        <header className="grid grid-cols-[auto_1fr] items-center gap-2 border-b border-zinc-800 px-4 py-2.5 sm:grid-cols-[1fr_auto_1fr]">
           <div className="flex min-w-0 items-center gap-2">
             <button
               onClick={() => setSidebarOpen((o) => !o)}
@@ -440,7 +459,7 @@ export default function App() {
             <HeaderInfo />
           </div>
 
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-start gap-2 sm:justify-end">
             <span
               className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
                 exhausted
@@ -480,7 +499,7 @@ export default function App() {
               {notifOpen && (
                 <div
                   data-testid="notif-panel"
-                  className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl shadow-black/40"
+                  className="absolute left-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl shadow-black/40 sm:left-auto sm:right-0"
                 >
                   <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
                     <span className="text-xs font-semibold text-zinc-300">Notifications</span>
