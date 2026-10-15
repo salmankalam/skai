@@ -411,7 +411,7 @@ export default function App() {
       )}
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-zinc-800 px-4 py-2.5">
+        <header className="grid grid-cols-[auto_1fr] items-center gap-2 border-b border-zinc-800 px-4 py-2.5 sm:grid-cols-[1fr_auto_1fr]">
           <div className="flex min-w-0 items-center gap-2">
             <button
               onClick={() => setSidebarOpen((o) => !o)}
@@ -440,7 +440,7 @@ export default function App() {
             <HeaderInfo />
           </div>
 
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-start gap-2 sm:justify-end">
             <span
               className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
                 exhausted
@@ -480,7 +480,7 @@ export default function App() {
               {notifOpen && (
                 <div
                   data-testid="notif-panel"
-                  className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl shadow-black/40"
+                  className="absolute left-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl shadow-black/40 sm:left-auto sm:right-0"
                 >
                   <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
                     <span className="text-xs font-semibold text-zinc-300">Notifications</span>
