@@ -124,11 +124,21 @@ export function HeaderInfo() {
 }
 
 function MobileInfoDisclosure({ label, children }: InfoTipProps) {
+  const [open, setOpen] = useState(false);
+
   return (
-    <details className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2">
-      <summary className="cursor-pointer list-none text-sm font-medium text-zinc-200">{label}</summary>
-      <div className="pt-2 text-[13px] leading-relaxed text-zinc-400">{children}</div>
-    </details>
+    <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between text-left text-sm font-medium text-zinc-200"
+      >
+        <span>{label}</span>
+        <span className="text-zinc-400">{open ? "−" : "+"}</span>
+      </button>
+      {open && <div className="pt-2 text-[13px] leading-relaxed text-zinc-400">{children}</div>}
+    </div>
   );
 }
 
