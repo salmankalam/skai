@@ -22,11 +22,7 @@ import {
 import { uploadFile, deleteFile } from "./server/files";
 import { chat } from "./server/chat";
 import { getDailyUsage } from "./server/usage";
-import {
-  createNotification,
-  listNotifications,
-  markAllNotificationsRead,
-} from "./server/notifications";
+import { listNotifications, markAllNotificationsRead } from "./server/notifications";
 import { DAILY_MESSAGE_LIMIT, FILE_DAILY_LIMIT, type DailyUsage } from "./lib/limits";
 import type { AppNotification, Conversation, FileAttachment, Message } from "./lib/types";
 
@@ -352,26 +348,19 @@ export default function App() {
       }
       const next = ALL_MODELS.find((m) => m.id === nextModel);
       if (next?.route === "openrouter" && userId) {
+        const notice: AppNotification = {
+          id: crypto.randomUUID(),
+          kind: "info",
+          message: OPENROUTER_SELECTION_NOTICE,
+          createdAt: Date.now(),
+          read: false,
+        };
         pushToast(
-          {
-            id: crypto.randomUUID(),
-            kind: "info",
-            message: OPENROUTER_SELECTION_NOTICE,
-            createdAt: Date.now(),
-            read: false,
-          },
+          notice,
           10000
         );
         setTimeout(() => {
-          createNotification({
-            data: {
-              userId,
-              kind: "info",
-              message: OPENROUTER_SELECTION_NOTICE,
-            },
-          })
-            .then((n) => setNotifications((prev) => [n, ...prev]))
-            .catch(() => {});
+          setNotifications((prev) => [notice, ...prev]);
         }, 10000);
       }
     },
