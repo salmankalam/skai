@@ -55,7 +55,9 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [usage, setUsage] = useState<DailyUsage | null>(null);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [toasts, setToasts] = useState<Array<{ id: string; message: string }>>([]);
+  const [toasts, setToasts] = useState<
+    Array<{ id: string; message: string; variant: "default" | "openrouter" }>
+  >([]);
   const [notifOpen, setNotifOpen] = useState(false);
   const loadedRef = useRef<Set<string>>(new Set());
   const toastedIdsRef = useRef<Set<string>>(new Set());
@@ -67,15 +69,18 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  const pushToast = useCallback((n: AppNotification, durationMs = 8000) => {
-    if (toastedIdsRef.current.has(n.id)) return;
-    toastedIdsRef.current.add(n.id);
-    const toastId = n.id;
-    setToasts((prev) => [...prev.slice(-2), { id: toastId, message: n.message }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== toastId));
-    }, durationMs);
-  }, []);
+  const pushToast = useCallback(
+    (n: AppNotification, durationMs = 8000, variant: "default" | "openrouter" = "default") => {
+      if (toastedIdsRef.current.has(n.id)) return;
+      toastedIdsRef.current.add(n.id);
+      const toastId = n.id;
+      setToasts((prev) => [...prev.slice(-2), { id: toastId, message: n.message, variant }]);
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== toastId));
+      }, durationMs);
+    },
+    []
+  );
 
   const refreshNotifications = useCallback(
     (uid: string) => {
@@ -355,10 +360,7 @@ export default function App() {
           createdAt: Date.now(),
           read: false,
         };
-        pushToast(
-          notice,
-          10000
-        );
+        pushToast(notice, 10000, "openrouter");
         setTimeout(() => {
           setNotifications((prev) => [notice, ...prev]);
         }, 10000);
@@ -459,7 +461,7 @@ export default function App() {
             <HeaderInfo />
           </div>
 
-          <div className="flex items-center justify-start gap-2 sm:justify-end">
+          <div className="flex items-center justify-end gap-2">
             <span
               className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
                 exhausted
@@ -499,7 +501,7 @@ export default function App() {
               {notifOpen && (
                 <div
                   data-testid="notif-panel"
-                  className="absolute left-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl shadow-black/40 sm:left-auto sm:right-0"
+                  className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-1rem)] rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl shadow-black/40"
                 >
                   <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2">
                     <span className="text-xs font-semibold text-zinc-300">Notifications</span>
@@ -597,16 +599,30 @@ export default function App() {
         )}
       </main>
 
-      <div className="pointer-events-none fixed bottom-20 right-4 z-[60] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
+      <div className="pointer-events-none fixed bottom-[calc(7.5rem+env(safe-area-inset-bottom))] left-1/2 z-[60] flex w-80 max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col gap-2 sm:bottom-24">
         {toasts.map((t) => (
           <div
             key={t.id}
             data-testid="toast"
-            className="pointer-events-auto flex items-start gap-2.5 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2.5 shadow-xl shadow-black/40"
+            className={`pointer-events-auto flex items-start gap-2.5 rounded-xl border px-3 py-2.5 shadow-xl shadow-black/40 ${
+              t.variant === "openrouter"
+                ? "border-amber-700/70 bg-amber-950/90"
+                : "border-zinc-700 bg-zinc-900"
+            }`}
             style={{ animation: "toast-in 200ms ease-out" }}
           >
-            <Bell className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-400" />
-            <p className="text-xs leading-relaxed text-zinc-300">{t.message}</p>
+            <Bell
+              className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${
+                t.variant === "openrouter" ? "text-amber-400" : "text-violet-400"
+              }`}
+            />
+            <p
+              className={`text-xs leading-relaxed ${
+                t.variant === "openrouter" ? "text-amber-200" : "text-zinc-300"
+              }`}
+            >
+              {t.message}
+            </p>
           </div>
         ))}
       </div>
